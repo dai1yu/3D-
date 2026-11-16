@@ -144,7 +144,6 @@ background:rgba(3,35,44,.94);border:1px solid #16d9df;box-shadow:0 0 20px #087b8
 </div>
 <div class="corner c1">FACTORY 3D VISUALIZATION　/　数字工厂场景</div>
 
-<!-- 保留左侧设备运行监控面板 -->
 <div class="panel left">
   <div class="panel-title">设备运行监控 <span>DEVICE MONITOR</span></div>
   <div class="section-label">生产线设备列表</div>
@@ -357,7 +356,7 @@ function box(parent,x,y,z,w,h,d,material,cast=true){
  m.position.set(x,y,z);m.castShadow=cast;m.receiveShadow=true;parent.add(m);return m;
 }
 function cyl(parent,rt,rb,h,material,x,y,z){
- const geo=new THREE.CylinderGeometry(rt,rb,h,24);
+ const geo=new THREE.CylinderGeometry(rt,rb,h,32);
  const mesh=new THREE.Mesh(geo,material);
  mesh.position.set(x,y,z);mesh.castShadow=true;mesh.receiveShadow=true;parent.add(mesh);return mesh;
 }
@@ -371,7 +370,7 @@ const glow=mat(0x00cbd8,.3,.25,0x006b77);
 const redAlert=mat(0xdd3333,.4,.3);
 const blackPlastic=mat(0x0c0f14,.2,.45);
 
-// 升级CNC加工中心机床模型
+// 精细CNC加工中心
 function makeMachine(x,z,label){
  const g=new THREE.Group();
  g.position.set(x,0,z);
@@ -412,7 +411,7 @@ const machines=[
  makeMachine(-7,-5,'精密检测工作站 E05')
 ];
 
-// 传送带：反向运行
+//传送带
 const beltMat=mat(0x253f49,.65,.4);
 box(scene,-1.1,.43,5.35,12.2,.52,1.65,beltMat);
 box(scene,-1.1,.72,5.35,11.9,.08,1.35,mat(0x0a5963,.5,.3));
@@ -425,34 +424,51 @@ box(scene,-1.1,.92,4.55,12.0,.12,.10,steel);
 box(scene,-1.1,.92,6.15,12.0,.12,.10,steel);
 box(scene,5.25,.78,5.35,.45,.18,1.55,yellow);
 
-// 工件改成第三张金属加工件外观
+// ===== 铝合金多凸台孔位加工工件 =====
 function makeMetalPart(){
  const g=new THREE.Group();
+ const aluminum=new THREE.MeshStandardMaterial({color:0xf4f6f7,metalness:0.85,roughness:0.22});
+ const darkAluminum=new THREE.MeshStandardMaterial({color:0xd8dde0,metalness:0.8,roughness:0.28});
+ const holeMat=new THREE.MeshStandardMaterial({color:0xbcc4c8,metalness:0.75,roughness:0.32});
 
- const bodyMat=mat(0xd8dde0,.75,.28);
- const accentMat=mat(0xf2f4f4,.8,.22);
- const darkMat=mat(0x6c757d,.65,.35);
-
- const base=new THREE.Mesh(new THREE.BoxGeometry(0.82,0.42,0.74),bodyMat);
+ const base=new THREE.Mesh(new THREE.BoxGeometry(1.05,0.42,0.85),aluminum);
  base.castShadow=true;base.receiveShadow=true;g.add(base);
 
- const topBlock=new THREE.Mesh(new THREE.BoxGeometry(0.34,0.14,0.30),accentMat);
- topBlock.position.set(0,0.28,0);g.add(topBlock);
+ const smallBoss=new THREE.Mesh(new THREE.CylinderGeometry(0.13,0.14,0.40,32),aluminum);
+ smallBoss.position.set(-0.30,0.62,0.0);
+ smallBoss.castShadow=true;g.add(smallBoss);
 
- const boss=new THREE.Mesh(new THREE.CylinderGeometry(0.16,0.18,0.22,24),bodyMat);
- boss.position.set(0,0.36,0.22);boss.castShadow=true;g.add(boss);
+ const pocketA=new THREE.Mesh(new THREE.BoxGeometry(0.26,0.12,0.22),darkAluminum);
+ pocketA.position.set(-0.32,0.44,-0.28);
+ g.add(pocketA);
 
- const sideL=new THREE.Mesh(new THREE.BoxGeometry(0.10,0.22,0.22),darkMat);
- sideL.position.set(-0.30,0.12,0.0);g.add(sideL);
+ const bigBoss=new THREE.Mesh(new THREE.CylinderGeometry(0.24,0.26,0.50,32),aluminum);
+ bigBoss.position.set(0.28,0.67,0.18);
+ bigBoss.castShadow=true;g.add(bigBoss);
 
- const sideR=new THREE.Mesh(new THREE.BoxGeometry(0.10,0.22,0.22),darkMat);
- sideR.position.set(0.30,0.12,0.0);g.add(sideR);
+ const bigHole=new THREE.Mesh(new THREE.CylinderGeometry(0.12,0.13,0.52,32),holeMat);
+ bigHole.position.set(0.28,0.67,0.18);
+ g.add(bigHole);
 
- const step1=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.10,0.18),accentMat);
- step1.position.set(-0.12,0.22,-0.24);g.add(step1);
+ const roundPocket=new THREE.Mesh(new THREE.CylinderGeometry(0.18,0.19,0.14,32),darkAluminum);
+ roundPocket.position.set(-0.05,0.49,-0.10);
+ g.add(roundPocket);
 
- const step2=new THREE.Mesh(new THREE.BoxGeometry(0.18,0.08,0.14),accentMat);
- step2.position.set(0.14,0.24,0.20);g.add(step2);
+ const centerHole=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.06,0.16,24),holeMat);
+ centerHole.position.set(-0.05,0.49,-0.10);
+ g.add(centerHole);
+
+ const shallowPocket=new THREE.Mesh(new THREE.CylinderGeometry(0.20,0.21,0.12,32),darkAluminum);
+ shallowPocket.position.set(0.30,0.48,-0.25);
+ g.add(shallowPocket);
+
+ const stepPad=new THREE.Mesh(new THREE.BoxGeometry(0.50,0.14,0.40),darkAluminum);
+ stepPad.position.set(0.10,0.21,0.0);
+ g.add(stepPad);
+
+ const sideTrim=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.28,0.70),aluminum);
+ sideTrim.position.set(-0.49,0.50,0.0);
+ g.add(sideTrim);
 
  return g;
 }
@@ -465,7 +481,7 @@ for(let i=0;i<4;i++){
  workpieces.push(group);
 }
 
-// 工业相机
+//工业相机
 const cameraRig=new THREE.Group();cameraRig.position.set(-1.2,2.65,3.55);scene.add(cameraRig);
 box(cameraRig,0,0,0,.82,.48,.62,dark);
 const camLens=new THREE.Mesh(new THREE.CylinderGeometry(.17,.17,.34,24),mat(0x07131b,.7,.18));
@@ -480,14 +496,14 @@ const detectFrame=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGe
 detectFrame.position.set(-1.2,1.20,5.35);scene.add(detectFrame);
 const detectBeam=new THREE.SpotLight(0x00d9e8,5,5,Math.PI/5,.45,1.2);detectBeam.position.set(-1.2,2.55,4.12);detectBeam.target.position.set(-1.2,1.05,5.35);scene.add(detectBeam);scene.add(detectBeam.target);
 
-// 废品箱
+//废品箱
 const rejectBin=new THREE.Group();rejectBin.position.set(-1.1,0,9.55);scene.add(rejectBin);
 box(rejectBin,0,.48,0,2.2,.95,1.75,mat(0x57232a,.35,.5));
 box(rejectBin,0,1.02,0,2.05,.12,1.62,mat(0xb72e36,.25,.35));
 box(rejectBin,0,1.42,-.90,1.35,.72,.10,mat(0x241c25,.3,.5));
 box(rejectBin,0,1.43,-.835,1.12,.46,.025,mat(0xff4545,.2,.3,0x7a1010),false);
 
-// 机械臂
+//机械臂
 function makeRobot(x,z){
  const root=new THREE.Group();root.position.set(x,0,z);scene.add(root);
  const armMat=mat(0xdce4e6,.78,.23), jointMat=mat(0x202a30,.82,.25),
@@ -569,7 +585,7 @@ function classifyPart(part){
  updateProductionBoard();
 }
 
-// 厂房梁柱
+//厂房梁柱
 for(let x=-13;x<=13;x+=6.5){
  for(let z of [-11,10]){
   box(scene,x,5,z,.25,10,.25,steel);
@@ -645,7 +661,7 @@ function animate(){
    return;
   }
   if(part.userData.state==='moving'||part.userData.state==='passed'){
-   // 工件反向运行：从右向左
+   //工件从右向左移动
    part.position.x-=0.012*SIM_CONFIG.speedRate;
 
    if(!part.userData.classified&&part.position.x<=-1.1){
