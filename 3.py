@@ -9,7 +9,6 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 隐藏streamlit原生组件
 st.markdown("""
 <style>
     #MainMenu, footer, header, [data-testid="stToolbar"] {visibility: hidden;}
@@ -54,19 +53,28 @@ padding:9px 16px;cursor:pointer;letter-spacing:1px;clip-path:polygon(8px 0,100% 
 .top-btn.active,.top-btn:hover{background:rgba(0,205,210,.35);box-shadow:0 0 14px rgba(0,224,230,.28)}
 .clock{font-size:12px;color:#83cbd2;margin-left:12px;min-width:145px;text-align:right}
 
-/* ========== 删除左侧面板样式，彻底移除 .left 面板 ========== */
-.right{right:18px;top:88px;bottom:128px}
 .panel{position:absolute;z-index:3;width:265px;background:linear-gradient(135deg,rgba(3,26,37,.92),rgba(3,18,29,.77));
 border:1px solid var(--line);box-shadow:0 0 20px rgba(0,207,222,.10),inset 0 0 22px rgba(0,150,170,.08);
 padding:14px 14px 12px;backdrop-filter:blur(8px)}
 .panel:before,.panel:after{content:"";position:absolute;width:35px;height:2px;background:var(--cyan);box-shadow:0 0 8px var(--cyan)}
 .panel:before{left:-1px;top:-1px}.panel:after{right:-1px;bottom:-1px}
 
+.left{left:18px;top:88px;bottom:128px}
+.right{right:18px;top:88px;bottom:128px}
+
 .panel-title{font-size:14px;letter-spacing:2px;color:#b8faff;border-bottom:1px solid rgba(38,211,221,.32);
 padding:0 0 11px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center}
 .panel-title span{font-size:10px;color:#5bcbd3;letter-spacing:1px}
 .section-label{font-size:11px;color:#57c8d1;margin:13px 0 8px;display:flex;align-items:center;gap:8px}
 .section-label:before{content:"";width:5px;height:5px;background:#19dce2;box-shadow:0 0 8px #19dce2}
+.device{display:flex;justify-content:space-between;align-items:center;padding:9px 8px;margin:5px 0;
+border:1px solid rgba(27,170,185,.18);background:rgba(12,73,86,.18);font-size:11px;color:#b8dfe3;cursor:pointer}
+.device:hover,.device.selected{border-color:#14dce3;background:rgba(0,175,190,.22);color:#e1ffff}
+.dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:7px;background:#23e7a5;box-shadow:0 0 8px #23e7a5}
+.dot.warn{background:#ffba45;box-shadow:0 0 8px #ffba45}
+.dot.off{background:#768a91;box-shadow:none}
+.status{color:#39e9bd;font-size:10px}
+.status.warn{color:#ffc15b}
 
 .metric-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .metric{padding:10px 8px;background:rgba(10,72,86,.28);border:1px solid rgba(27,184,195,.23);min-height:67px}
@@ -108,7 +116,7 @@ background:rgba(3,35,44,.94);border:1px solid #16d9df;box-shadow:0 0 20px #087b8
 .tooltip.show{display:block}
 
 @media(max-width:1100px){
- .panel{width:220px}.right{right:8px}
+ .panel{width:220px}.left{left:8px}.right{right:8px}
  .bottom{left:8px;right:8px;gap:5px}.bottom-card{padding:9px 7px}
  .bottom-card strong{font-size:17px}.brand{font-size:17px}
  .top-actions{gap:4px;}
@@ -136,7 +144,33 @@ background:rgba(3,35,44,.94);border:1px solid #16d9df;box-shadow:0 0 20px #087b8
 </div>
 <div class="corner c1">FACTORY 3D VISUALIZATION　/　数字工厂场景</div>
 
-<!-- ========== 完全删除左侧面板HTML代码 ========== -->
+<!-- 保留左侧设备运行监控面板 -->
+<div class="panel left">
+  <div class="panel-title">设备运行监控 <span>DEVICE MONITOR</span></div>
+  <div class="section-label">生产线设备列表</div>
+  <div class="device selected" onclick="selectDevice(this,'数控加工中心 A01')"><span><i class="dot"></i>数控加工中心 A01</span><b class="status">运行中</b></div>
+  <div class="device" onclick="selectDevice(this,'数控车床 B02')"><span><i class="dot"></i>数控车床 B02</span><b class="status">运行中</b></div>
+  <div class="device" onclick="selectDevice(this,'智能机械臂 C03')"><span><i class="dot warn"></i>智能机械臂 C03</span><b class="status warn">待机</b></div>
+  <div class="device" onclick="selectDevice(this,'自动传送线 D04')"><span><i class="dot"></i>自动传送线 D04</span><b class="status">运行中</b></div>
+  <div class="device" onclick="selectDevice(this,'检测工作站 E05')"><span><i class="dot off"></i>检测工作站 E05</span><b class="status">离线</b></div>
+  <div class="section-label">设备实时参数</div>
+  <div class="metric-grid">
+    <div class="metric"><label>主轴转速</label><strong id="rpm">3200</strong><em>rpm</em></div>
+    <div class="metric"><label>主轴负载</label><strong id="load">68</strong><em>%</em></div>
+    <div class="metric"><label>设备温度</label><strong id="temp">36.5</strong><em>℃</em></div>
+    <div class="metric"><label>运行时长</label><strong>08:26</strong><em>h</em></div>
+  </div>
+  <div class="section-label">设备运行状态</div>
+  <div class="bar-row"><span>运行时间</span><div class="bar"><i style="width:86%"></i></div><b>86%</b></div>
+  <div class="bar-row"><span>加工进度</span><div class="bar"><i style="width:72%"></i></div><b>72%</b></div>
+  <div class="bar-row"><span>健康指数</span><div class="bar"><i style="width:96%"></i></div><b>96%</b></div>
+  <div class="section-label">视觉检测摄像头</div>
+  <div class="device" id="cameraStatus"><span><i class="dot"></i>传送带工业相机 CAM-01</span><b class="status" id="camState">在线</b></div>
+  <div class="metric-grid">
+    <div class="metric"><label>检测状态</label><strong id="detectState" style="font-size:15px">待检测</strong></div>
+    <div class="metric"><label>当前识别数</label><strong id="detectCount">0</strong><em>件</em></div>
+  </div>
+</div>
 
 <div class="panel right">
   <div class="panel-title">生产数据分析 <span>DATA ANALYSIS</span></div>
@@ -183,7 +217,6 @@ background:rgba(3,35,44,.94);border:1px solid #16d9df;box-shadow:0 0 20px #087b8
 {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}
 </script>
 <script>
-// 仿真内置配置
 const SIM_CONFIG = {
  speedRate: 1.0,
  defectRate: 0.30,
@@ -228,11 +261,23 @@ function toggleAuto(){
  showToast(auto?'已开启自动监测':'已暂停自动监测');
 }
 
+function selectDevice(el,name){
+ document.querySelectorAll('.device').forEach(x=>x.classList.remove('selected'));
+ el.classList.add('selected');
+ id('modalTitle').textContent=name;
+ id('modalBody').innerHTML='<p>设备状态：运行中</p><p>所属产线：智能加工生产线 01</p><p>当前工序：工件输送 / 自动加工</p><p>提示：当前参数为界面演示数据，接入真实设备后可显示现场数据。</p><button class="action" onclick="showToast(\'已发送设备状态刷新请求\')">刷新设备数据</button><button class="action" onclick="toggleDeviceState(this)">切换启停状态</button>';
+ openPanel('device');
+}
+function toggleDeviceState(btn){
+ const running=btn.textContent.includes('切换启停');
+ btn.textContent=running?'设备已暂停（点击恢复）':'切换启停状态';
+ showToast(running?'演示设备已暂停':'演示设备已恢复运行');
+}
 function openPanel(type){
  const mask=id('modalMask'),title=id('modalTitle'),body=id('modalBody');
  if(type==='monitor'){
   title.textContent='生产线数据监测';
-  body.innerHTML='<p>主轴转速：3200 rpm</p><p>主轴负载：68%</p><p>设备温度：36.5 ℃</p><p>视觉相机：CAM-01 在线</p><p>检测结果为演示数据；接入 ONNX 模型后显示真实识别类别与置信度。</p>';
+  body.innerHTML='<p>主轴转速：'+id('rpm').textContent+' rpm</p><p>主轴负载：'+id('load').textContent+'%</p><p>设备温度：'+id('temp').textContent+' ℃</p><p>视觉相机：CAM-01 在线</p><p>检测结果为演示数据；接入 ONNX 模型后显示真实识别类别与置信度。</p>';
  }else if(type==='inspect'){
   title.textContent='设备巡检任务';
   body.innerHTML='<p>巡检对象：A01 数控加工中心、CAM-01 工业相机、传送带 D04、机械臂 C03</p><p>巡检项目：设备在线状态、温度、运行负载、相机画面、输送线运行情况。</p><p id="inspectResult">待执行巡检。</p><button class="action" onclick="runInspection()">开始巡检</button>';
@@ -252,6 +297,9 @@ function showToast(msg){
 
 setInterval(()=>{
  if(!auto)return;
+ id('rpm').textContent=3200+Math.floor(Math.random()*45-22);
+ id('load').textContent=66+Math.floor(Math.random()*6);
+ id('temp').textContent=(36.3+Math.random()*.6).toFixed(1);
 },1800);
 
 window.addEventListener('load',()=>{
@@ -323,50 +371,35 @@ const glow=mat(0x00cbd8,.3,.25,0x006b77);
 const redAlert=mat(0xdd3333,.4,.3);
 const blackPlastic=mat(0x0c0f14,.2,.45);
 
-// ========== 重写升级精细CNC加工中心机床模型 ==========
+// 升级CNC加工中心机床模型
 function makeMachine(x,z,label){
  const g=new THREE.Group();
  g.position.set(x,0,z);
  scene.add(g);
 
- // 机床厚重底座
  box(g, 0,0.40,0, 4.2,0.80,3.0, dark);
- // 地脚
  for(let dx of [-1.8,1.8]) for(let dz of [-1.3,1.3]){
     box(g,dx,0.12,dz,0.45,0.22,0.45,blackPlastic);
  }
 
- // 床身主体
  box(g,0,1.40,0,3.8,1.6,2.6,steel);
-
- // 防护推拉门框架
  box(g,0,1.45,1.45,3.4,1.4,0.12,steel);
- // 透明防护观察门
  box(g,0,1.48,1.52,3.2,1.32,0.06,glass,false);
 
- // 立式主轴箱体
  box(g,0,2.45,0,1.4,1.3,1.1,dark);
- // 主轴套筒圆柱
  cyl(g,0.22,0.22,0.75,steel,0,3.0,0);
- // 刀库圆盘
  cyl(g,0.65,0.65,0.28,dark,-1.4,2.45,0);
 
- // 操作面板 + 显示屏
  box(g,1.9,1.65,0.6, 0.22,0.85,0.75, blackPlastic);
  box(g,1.92,1.70,0.65,0.14,0.62,0.48,glow,false);
 
- // 顶部三色警示灯底座
  box(g,0,3.45,0,0.75,0.32,0.75,dark);
  cyl(g,0.14,0.14,0.6,steel,0,3.95,0);
- // 三色灯红黄绿
  cyl(g,0.11,0.11,0.22,redAlert,0,4.32,0);
  cyl(g,0.11,0.11,0.22,mat(0xffcc22,.5,.2),0,4.60,0);
  cyl(g,0.11,0.11,0.22,mat(0x30dd60,.5,.2),0,4.88,0);
 
- // 侧面散热格栅装饰条
  box(g,-2.1,1.55,0,0.08,1.2,2.2,yellow,false);
-
- // 后部检修盖板
  box(g,-1.7,1.6, -1.1,1.4,1.1,0.14,steel);
 
  g.userData.label=label;
@@ -379,7 +412,7 @@ const machines=[
  makeMachine(-7,-5,'精密检测工作站 E05')
 ];
 
-//传送带
+// 传送带：反向运行
 const beltMat=mat(0x253f49,.65,.4);
 box(scene,-1.1,.43,5.35,12.2,.52,1.65,beltMat);
 box(scene,-1.1,.72,5.35,11.9,.08,1.35,mat(0x0a5963,.5,.3));
@@ -392,19 +425,47 @@ box(scene,-1.1,.92,4.55,12.0,.12,.10,steel);
 box(scene,-1.1,.92,6.15,12.0,.12,.10,steel);
 box(scene,5.25,.78,5.35,.45,.18,1.55,yellow);
 
-//工件
+// 工件改成第三张金属加工件外观
+function makeMetalPart(){
+ const g=new THREE.Group();
+
+ const bodyMat=mat(0xd8dde0,.75,.28);
+ const accentMat=mat(0xf2f4f4,.8,.22);
+ const darkMat=mat(0x6c757d,.65,.35);
+
+ const base=new THREE.Mesh(new THREE.BoxGeometry(0.82,0.42,0.74),bodyMat);
+ base.castShadow=true;base.receiveShadow=true;g.add(base);
+
+ const topBlock=new THREE.Mesh(new THREE.BoxGeometry(0.34,0.14,0.30),accentMat);
+ topBlock.position.set(0,0.28,0);g.add(topBlock);
+
+ const boss=new THREE.Mesh(new THREE.CylinderGeometry(0.16,0.18,0.22,24),bodyMat);
+ boss.position.set(0,0.36,0.22);boss.castShadow=true;g.add(boss);
+
+ const sideL=new THREE.Mesh(new THREE.BoxGeometry(0.10,0.22,0.22),darkMat);
+ sideL.position.set(-0.30,0.12,0.0);g.add(sideL);
+
+ const sideR=new THREE.Mesh(new THREE.BoxGeometry(0.10,0.22,0.22),darkMat);
+ sideR.position.set(0.30,0.12,0.0);g.add(sideR);
+
+ const step1=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.10,0.18),accentMat);
+ step1.position.set(-0.12,0.22,-0.24);g.add(step1);
+
+ const step2=new THREE.Mesh(new THREE.BoxGeometry(0.18,0.08,0.14),accentMat);
+ step2.position.set(0.14,0.24,0.20);g.add(step2);
+
+ return g;
+}
+
 const workpieces=[];
-const partMaterials=[mat(0xe0b52d,.45,.34),mat(0x8aa7ad,.55,.3),mat(0x16a6ad,.4,.3),mat(0xc0cbd0,.55,.3)];
 for(let i=0;i<4;i++){
- const group=new THREE.Group();
- const body=new THREE.Mesh(new THREE.BoxGeometry(.78,.38,.72),partMaterials[i]);body.castShadow=true;group.add(body);
- if(i!==2){const cap=new THREE.Mesh(new THREE.BoxGeometry(.30,.13,.28),yellow);cap.position.y=.245;group.add(cap);}
- group.position.set(-6.2+i*2.75,1.02,5.35);scene.add(group);
+ const group=makeMetalPart();
+ group.position.set(5.6-i*2.75,1.02,5.35);scene.add(group);
  group.userData={index:i,offset:i*2.75,state:'moving',bad:Math.random()<SIM_CONFIG.defectRate,missing:false,classified:false};
  workpieces.push(group);
 }
 
-//工业相机
+// 工业相机
 const cameraRig=new THREE.Group();cameraRig.position.set(-1.2,2.65,3.55);scene.add(cameraRig);
 box(cameraRig,0,0,0,.82,.48,.62,dark);
 const camLens=new THREE.Mesh(new THREE.CylinderGeometry(.17,.17,.34,24),mat(0x07131b,.7,.18));
@@ -419,14 +480,14 @@ const detectFrame=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGe
 detectFrame.position.set(-1.2,1.20,5.35);scene.add(detectFrame);
 const detectBeam=new THREE.SpotLight(0x00d9e8,5,5,Math.PI/5,.45,1.2);detectBeam.position.set(-1.2,2.55,4.12);detectBeam.target.position.set(-1.2,1.05,5.35);scene.add(detectBeam);scene.add(detectBeam.target);
 
-//废品箱
+// 废品箱
 const rejectBin=new THREE.Group();rejectBin.position.set(-1.1,0,9.55);scene.add(rejectBin);
 box(rejectBin,0,.48,0,2.2,.95,1.75,mat(0x57232a,.35,.5));
 box(rejectBin,0,1.02,0,2.05,.12,1.62,mat(0xb72e36,.25,.35));
 box(rejectBin,0,1.42,-.90,1.35,.72,.10,mat(0x241c25,.3,.5));
 box(rejectBin,0,1.43,-.835,1.12,.46,.025,mat(0xff4545,.2,.3,0x7a1010),false);
 
-//机械臂
+// 机械臂
 function makeRobot(x,z){
  const root=new THREE.Group();root.position.set(x,0,z);scene.add(root);
  const armMat=mat(0xdce4e6,.78,.23), jointMat=mat(0x202a30,.82,.25),
@@ -508,7 +569,7 @@ function classifyPart(part){
  updateProductionBoard();
 }
 
-//厂房梁柱
+// 厂房梁柱
 for(let x=-13;x<=13;x+=6.5){
  for(let z of [-11,10]){
   box(scene,x,5,z,.25,10,.25,steel);
@@ -526,6 +587,7 @@ machines.forEach((m,i)=>{
 function animate(){
  requestAnimationFrame(animate);
  const t=performance.now()*.001 * SIM_CONFIG.speedRate;
+
  if(activePick){
   const p=activePick;p.userData.pickT+=.012*SIM_CONFIG.speedRate;const q=Math.min(p.userData.pickT,1);
   const p0=p.userData.pickStart;
@@ -561,12 +623,15 @@ function animate(){
  }else{
   robot.shoulder.rotation.x=Math.sin(t*1.2)*.035;robot.elbow.rotation.x=.10+Math.sin(t*1.2+1)*.025;robot.wrist.rotation.x=Math.sin(t*.9)*.025;
  }
- beltRollers.forEach(roller=>{roller.rotation.x+=0.045*SIM_CONFIG.speedRate;});
+
+ // 滚轮反向旋转
+ beltRollers.forEach(roller=>{roller.rotation.x-=0.045*SIM_CONFIG.speedRate;});
+
  workpieces.forEach(part=>{
   if(part.userData.state==='stored'){
    part.userData.storedT=(part.userData.storedT||0)+.016*SIM_CONFIG.speedRate;
    if(part.userData.storedT>1.35){
-    part.position.set(-6.2,1.02,5.35);part.visible=true;
+    part.position.set(5.6,1.02,5.35);part.visible=true;
     part.userData.classified=false;part.userData.state='moving';
     part.userData.bad=Math.random()<SIM_CONFIG.defectRate;
     part.userData.missing=part.userData.bad&&Math.random()<0.5;
@@ -580,19 +645,23 @@ function animate(){
    return;
   }
   if(part.userData.state==='moving'||part.userData.state==='passed'){
-   part.position.x+=0.012*SIM_CONFIG.speedRate;
-   if(!part.userData.classified&&part.position.x>=-1.1){
+   // 工件反向运行：从右向左
+   part.position.x-=0.012*SIM_CONFIG.speedRate;
+
+   if(!part.userData.classified&&part.position.x<=-1.1){
     if(activePick&&part.userData.bad){part.position.x=-1.1;part.userData.state='queued';}
     else classifyPart(part);
    }
-   if(part.position.x>5.1){
-    part.position.x=-6.2;part.userData.classified=false;part.userData.state='moving';
+
+   if(part.position.x<-6.2){
+    part.position.x=5.6;part.userData.classified=false;part.userData.state='moving';
     part.userData.bad=Math.random()<SIM_CONFIG.defectRate;
     part.userData.missing=part.userData.bad&&Math.random()<0.5;
     part.userData.pickT=0;part.visible=true;
    }
   }
  });
+
  detectFrame.material.opacity=.55+.45*Math.sin(t*3);
  detectBeam.intensity=4+1.5*Math.sin(t*4);
  controls.update();renderer.render(scene,camera);
