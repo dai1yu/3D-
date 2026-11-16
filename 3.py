@@ -370,7 +370,7 @@ const glow=mat(0x00cbd8,.3,.25,0x006b77);
 const redAlert=mat(0xdd3333,.4,.3);
 const blackPlastic=mat(0x0c0f14,.2,.45);
 
-// 精细CNC加工中心
+// CNC加工中心
 function makeMachine(x,z,label){
  const g=new THREE.Group();
  g.position.set(x,0,z);
@@ -424,50 +424,50 @@ box(scene,-1.1,.92,4.55,12.0,.12,.10,steel);
 box(scene,-1.1,.92,6.15,12.0,.12,.10,steel);
 box(scene,5.25,.78,5.35,.45,.18,1.55,yellow);
 
-// ===== 铝合金多凸台孔位加工工件 =====
+// 优化后的加工工件，缩小尺寸，防止重叠
 function makeMetalPart(){
  const g=new THREE.Group();
- const aluminum=new THREE.MeshStandardMaterial({color:0xf4f6f7,metalness:0.85,roughness:0.22});
- const darkAluminum=new THREE.MeshStandardMaterial({color:0xd8dde0,metalness:0.8,roughness:0.28});
+ const aluminum=new THREE.MeshStandardMaterial({color:0xf1f4f5,metalness:0.82,roughness:0.24});
+ const darkAluminum=new THREE.MeshStandardMaterial({color:0xd7dce0,metalness:0.8,roughness:0.28});
  const holeMat=new THREE.MeshStandardMaterial({color:0xbcc4c8,metalness:0.75,roughness:0.32});
 
- const base=new THREE.Mesh(new THREE.BoxGeometry(1.05,0.42,0.85),aluminum);
+ const base=new THREE.Mesh(new THREE.BoxGeometry(0.78,0.34,0.70),aluminum);
  base.castShadow=true;base.receiveShadow=true;g.add(base);
 
- const smallBoss=new THREE.Mesh(new THREE.CylinderGeometry(0.13,0.14,0.40,32),aluminum);
- smallBoss.position.set(-0.30,0.62,0.0);
+ const smallBoss=new THREE.Mesh(new THREE.CylinderGeometry(0.10,0.11,0.34,28),aluminum);
+ smallBoss.position.set(-0.22,0.51,0.0);
  smallBoss.castShadow=true;g.add(smallBoss);
 
- const pocketA=new THREE.Mesh(new THREE.BoxGeometry(0.26,0.12,0.22),darkAluminum);
- pocketA.position.set(-0.32,0.44,-0.28);
+ const pocketA=new THREE.Mesh(new THREE.BoxGeometry(0.20,0.10,0.18),darkAluminum);
+ pocketA.position.set(-0.24,0.39,-0.24);
  g.add(pocketA);
 
- const bigBoss=new THREE.Mesh(new THREE.CylinderGeometry(0.24,0.26,0.50,32),aluminum);
- bigBoss.position.set(0.28,0.67,0.18);
+ const bigBoss=new THREE.Mesh(new THREE.CylinderGeometry(0.18,0.19,0.42,28),aluminum);
+ bigBoss.position.set(0.20,0.56,0.14);
  bigBoss.castShadow=true;g.add(bigBoss);
 
- const bigHole=new THREE.Mesh(new THREE.CylinderGeometry(0.12,0.13,0.52,32),holeMat);
- bigHole.position.set(0.28,0.67,0.18);
+ const bigHole=new THREE.Mesh(new THREE.CylinderGeometry(0.10,0.11,0.44,28),holeMat);
+ bigHole.position.set(0.20,0.56,0.14);
  g.add(bigHole);
 
- const roundPocket=new THREE.Mesh(new THREE.CylinderGeometry(0.18,0.19,0.14,32),darkAluminum);
- roundPocket.position.set(-0.05,0.49,-0.10);
+ const roundPocket=new THREE.Mesh(new THREE.CylinderGeometry(0.14,0.15,0.12,28),darkAluminum);
+ roundPocket.position.set(-0.04,0.42,-0.08);
  g.add(roundPocket);
 
- const centerHole=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.06,0.16,24),holeMat);
- centerHole.position.set(-0.05,0.49,-0.10);
+ const centerHole=new THREE.Mesh(new THREE.CylinderGeometry(0.04,0.045,0.14,20),holeMat);
+ centerHole.position.set(-0.04,0.42,-0.08);
  g.add(centerHole);
 
- const shallowPocket=new THREE.Mesh(new THREE.CylinderGeometry(0.20,0.21,0.12,32),darkAluminum);
- shallowPocket.position.set(0.30,0.48,-0.25);
+ const shallowPocket=new THREE.Mesh(new THREE.CylinderGeometry(0.15,0.16,0.10,28),darkAluminum);
+ shallowPocket.position.set(0.22,0.40,-0.20);
  g.add(shallowPocket);
 
- const stepPad=new THREE.Mesh(new THREE.BoxGeometry(0.50,0.14,0.40),darkAluminum);
- stepPad.position.set(0.10,0.21,0.0);
+ const stepPad=new THREE.Mesh(new THREE.BoxGeometry(0.38,0.12,0.32),darkAluminum);
+ stepPad.position.set(0.08,0.17,0.0);
  g.add(stepPad);
 
- const sideTrim=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.28,0.70),aluminum);
- sideTrim.position.set(-0.49,0.50,0.0);
+ const sideTrim=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.22,0.56),aluminum);
+ sideTrim.position.set(-0.36,0.44,0.0);
  g.add(sideTrim);
 
  return g;
@@ -476,8 +476,17 @@ function makeMetalPart(){
 const workpieces=[];
 for(let i=0;i<4;i++){
  const group=makeMetalPart();
- group.position.set(5.6-i*2.75,1.02,5.35);scene.add(group);
- group.userData={index:i,offset:i*2.75,state:'moving',bad:Math.random()<SIM_CONFIG.defectRate,missing:false,classified:false};
+ group.position.set(5.6-i*2.95,1.02,5.35);
+ scene.add(group);
+ group.userData={
+   index:i,
+   offset:i*2.95,
+   state:'moving',
+   bad:Math.random()<SIM_CONFIG.defectRate,
+   missing:false,
+   classified:false,
+   baseY:1.02
+ };
  workpieces.push(group);
 }
 
@@ -607,7 +616,7 @@ function animate(){
  if(activePick){
   const p=activePick;p.userData.pickT+=.012*SIM_CONFIG.speedRate;const q=Math.min(p.userData.pickT,1);
   const p0=p.userData.pickStart;
-  const grip=new THREE.Vector3(-1.1,1.34,5.35);
+  const grip=new THREE.Vector3(-1.1,1.26,5.35);
   const lifted=new THREE.Vector3(-1.1,2.0,5.75);
   const carry=new THREE.Vector3(-1.1,1.95,8.55);
   const drop=new THREE.Vector3(-1.1,1.32,9.45);
@@ -647,7 +656,7 @@ function animate(){
   if(part.userData.state==='stored'){
    part.userData.storedT=(part.userData.storedT||0)+.016*SIM_CONFIG.speedRate;
    if(part.userData.storedT>1.35){
-    part.position.set(5.6,1.02,5.35);part.visible=true;
+    part.position.set(5.6,part.userData.baseY,5.35);part.visible=true;
     part.userData.classified=false;part.userData.state='moving';
     part.userData.bad=Math.random()<SIM_CONFIG.defectRate;
     part.userData.missing=part.userData.bad&&Math.random()<0.5;
@@ -665,15 +674,25 @@ function animate(){
    part.position.x-=0.012*SIM_CONFIG.speedRate;
 
    if(!part.userData.classified&&part.position.x<=-1.1){
-    if(activePick&&part.userData.bad){part.position.x=-1.1;part.userData.state='queued';}
-    else classifyPart(part);
+    if(activePick&&part.userData.bad){
+      part.position.x=-1.1;
+      part.userData.state='queued';
+    }else if(!activePick){
+      classifyPart(part);
+    }else{
+      part.position.x=-1.1;
+    }
    }
 
    if(part.position.x<-6.2){
-    part.position.x=5.6;part.userData.classified=false;part.userData.state='moving';
+    part.position.x=5.6;
+    part.position.y=part.userData.baseY;
+    part.userData.classified=false;
+    part.userData.state='moving';
     part.userData.bad=Math.random()<SIM_CONFIG.defectRate;
     part.userData.missing=part.userData.bad&&Math.random()<0.5;
-    part.userData.pickT=0;part.visible=true;
+    part.userData.pickT=0;
+    part.visible=true;
    }
   }
  });
