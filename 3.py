@@ -3,7 +3,7 @@ import streamlit.components.v1 as components
 from datetime import datetime
 
 st.set_page_config(
-    page_title="智能工厂数字孪生平台｜移除挡传送带机床",
+    page_title="智能工厂数字孪生平台｜移除传送带旁机床",
     page_icon="🏭",
     layout="wide",
     initial_sidebar_state="collapsed"
@@ -149,8 +149,8 @@ background:rgba(3,35,44,.94);border:1px solid #16d9df;box-shadow:0 0 20px #087b8
   <div class="panel-title">设备运行监控 <span>DEVICE MONITOR</span></div>
   <div class="section-label">生产线设备列表</div>
   <div class="device selected" onclick="selectDevice(this,'数控加工中心 A01')"><span><i class="dot" id="dotA01"></i>数控加工中心 A01</span><b class="status" id="statA01">运行中</b></div>
-  <div class="device" onclick="selectDevice(this,'数控加工中心 A02')"><span><i class="dot" id="dotA02"></i>数控加工中心 A02</span><b class="status" id="statA02">运行中</b></div>
-  <div class="device" onclick="selectDevice(this,'数控加工中心 A03')"><span><i class="dot warn" id="dotA03"></i>数控加工中心 A03</span><b class="status warn" id="statA03">待机</b></div>
+  <div class="device" onclick="selectDevice(this,'数控加工中心 A02')"><span><i class="dot warn" id="dotA02"></i>数控加工中心 A02</span><b class="status warn" id="statA02">待机</b></div>
+  <div class="device" onclick="selectDevice(this,'数控加工中心 A03')"><span><i class="dot" id="dotA03"></i>数控加工中心 A03</span><b class="status" id="statA03">运行中</b></div>
   <div class="device" onclick="selectDevice(this,'数控车床 B02')"><span><i class="dot" id="dotB02"></i>数控车床 B02</span><b class="status" id="statB02">运行中</b></div>
   <div class="device" onclick="selectDevice(this,'检测工作站 E05')"><span><i class="dot off" id="dotE05"></i>检测工作站 E05</span><b class="status off" id="statE05">离线</b></div>
   <div class="section-label">设备实时参数</div>
@@ -333,7 +333,7 @@ function openPanel(type){
 }
 function runInspection(){
  const resEl = id('inspectResult');
- resEl.textContent = "✅ 巡检完成：A01运行正常，A02运行正常，A03待机，B02运行正常，E05离线；相机通信正常，无异常报警。";
+ resEl.textContent = "✅ 巡检完成：A01运行正常，A02待机，A03运行正常，B02运行正常，E05离线；相机通信正常，无异常报警。";
  showToast("设备巡检已完成");
 }
 function closePanel(e){if(!e||e.target.id==='modalMask')id('modalMask').classList.remove('show');}
@@ -518,12 +518,13 @@ function makeStation(x,z,label){
  return g;
 }
 
-// ========【已删除：-7,-10位置挡传送带的数控车床B03】========
+// ========【已删除：传送带旁边的数控加工中心 A02】========
 const machines=[
  makeMachine(7,4,'数控加工中心 A01'),
- makeMachine(7,-4,'数控加工中心 A02'),
+ // makeMachine(7,-4,'数控加工中心 A02'), // 已删除
  makeMachine(-7,4,'数控加工中心 A03'),
  makeLathe(7,-10,'数控车床 B02'),
+ makeLathe(-7,-10,'数控车床 B03'),
  makeStation(-7,-4,'检测工作站 E05')
 ];
 
