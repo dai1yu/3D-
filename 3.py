@@ -3,7 +3,7 @@ import streamlit.components.v1 as components
 from datetime import datetime
 
 st.set_page_config(
-    page_title="智能工厂数字孪生平台｜修复版",
+    page_title="智能工厂数字孪生平台｜修复穿模版",
     page_icon="🏭",
     layout="wide",
     initial_sidebar_state="collapsed"
@@ -300,7 +300,7 @@ function toggleDeviceState(){
     dot.className="dot off";
     stat.className="status off";
     stat.innerText="已停止";
-    stateText.innerText="已停止";
+    stateText.innerText="已停机";
     showToast(devName+" 已停机");
  }
 }
@@ -471,51 +471,55 @@ box(scene,-1.1,.92,4.55,12.0,.12,.10,steel);
 box(scene,-1.1,.92,6.15,12.0,.12,.10,steel);
 box(scene,5.25,.78,5.35,.45,.18,1.55,yellow);
 
-// 标准工件模型，尺寸固定
+// 修改后：降低高度，解决夹爪穿模
 function makeMetalPart(){
  const g=new THREE.Group();
  const aluminum=new THREE.MeshStandardMaterial({color:0xf1f4f5,metalness:0.82,roughness:0.24});
  const darkAluminum=new THREE.MeshStandardMaterial({color:0xd7dce0,metalness:0.8,roughness:0.28});
  const holeMat=new THREE.MeshStandardMaterial({color:0xbcc4c8,metalness:0.75,roughness:0.32});
 
- const base=new THREE.Mesh(new THREE.BoxGeometry(0.78,0.34,0.70),aluminum);
+ const base=new THREE.Mesh(new THREE.BoxGeometry(0.92,0.28,0.76),aluminum);
  base.castShadow=true;base.receiveShadow=true;g.add(base);
 
- const smallBoss=new THREE.Mesh(new THREE.CylinderGeometry(0.10,0.11,0.34,28),aluminum);
- smallBoss.position.set(-0.22,0.51,0.0);
+ const smallBoss=new THREE.Mesh(new THREE.CylinderGeometry(0.12,0.13,0.24,28),aluminum);
+ smallBoss.position.set(-0.26,0.44,0.0);
  smallBoss.castShadow=true;g.add(smallBoss);
 
- const pocketA=new THREE.Mesh(new THREE.BoxGeometry(0.20,0.10,0.18),darkAluminum);
- pocketA.position.set(-0.24,0.39,-0.24);
+ const pocketA=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.08,0.20),darkAluminum);
+ pocketA.position.set(-0.28,0.34,-0.26);
  g.add(pocketA);
 
- const bigBoss=new THREE.Mesh(new THREE.CylinderGeometry(0.18,0.19,0.42,28),aluminum);
- bigBoss.position.set(0.20,0.56,0.14);
+ const bigBoss=new THREE.Mesh(new THREE.CylinderGeometry(0.22,0.23,0.30,28),aluminum);
+ bigBoss.position.set(0.24,0.48,0.16);
  bigBoss.castShadow=true;g.add(bigBoss);
 
- const bigHole=new THREE.Mesh(new THREE.CylinderGeometry(0.10,0.11,0.44,28),holeMat);
- bigHole.position.set(0.20,0.56,0.14);
+ const bigHole=new THREE.Mesh(new THREE.CylinderGeometry(0.11,0.12,0.32,28),holeMat);
+ bigHole.position.set(0.24,0.48,0.16);
  g.add(bigHole);
 
- const roundPocket=new THREE.Mesh(new THREE.CylinderGeometry(0.14,0.15,0.12,28),darkAluminum);
- roundPocket.position.set(-0.04,0.42,-0.08);
+ const roundPocket=new THREE.Mesh(new THREE.CylinderGeometry(0.15,0.16,0.10,28),darkAluminum);
+ roundPocket.position.set(-0.04,0.37,-0.08);
  g.add(roundPocket);
 
- const centerHole=new THREE.Mesh(new THREE.CylinderGeometry(0.04,0.045,0.14,20),holeMat);
- centerHole.position.set(-0.04,0.42,-0.08);
+ const centerHole=new THREE.Mesh(new THREE.CylinderGeometry(0.045,0.05,0.12,20),holeMat);
+ centerHole.position.set(-0.04,0.37,-0.08);
  g.add(centerHole);
 
- const shallowPocket=new THREE.Mesh(new THREE.CylinderGeometry(0.15,0.16,0.10,28),darkAluminum);
- shallowPocket.position.set(0.22,0.40,-0.20);
+ const shallowPocket=new THREE.Mesh(new THREE.CylinderGeometry(0.16,0.17,0.08,28),darkAluminum);
+ shallowPocket.position.set(0.24,0.34,-0.22);
  g.add(shallowPocket);
 
- const stepPad=new THREE.Mesh(new THREE.BoxGeometry(0.38,0.12,0.32),darkAluminum);
- stepPad.position.set(0.08,0.17,0.0);
+ const stepPad=new THREE.Mesh(new THREE.BoxGeometry(0.44,0.10,0.36),darkAluminum);
+ stepPad.position.set(0.10,0.14,0.0);
  g.add(stepPad);
 
- const sideTrim=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.22,0.56),aluminum);
- sideTrim.position.set(-0.36,0.44,0.0);
+ const sideTrim=new THREE.Mesh(new THREE.BoxGeometry(0.07,0.18,0.62),aluminum);
+ sideTrim.position.set(-0.42,0.40,0.0);
  g.add(sideTrim);
+
+ const frontStep=new THREE.Mesh(new THREE.BoxGeometry(0.34,0.10,0.10),darkAluminum);
+ frontStep.position.set(0.12,0.34,0.30);
+ g.add(frontStep);
 
  return g;
 }
@@ -676,7 +680,7 @@ function animate(){
  if(activePick){
   const p=activePick;p.userData.pickT+=.012*SIM_CONFIG.speedRate;const q=Math.min(p.userData.pickT,1);
   const p0=p.userData.pickStart;
-  const grip=new THREE.Vector3(-1.1,1.26,5.35);
+  const grip=new THREE.Vector3(-1.1,1.24,5.35); // 修改夹取高度适配新工件，解决穿模
   const lifted=new THREE.Vector3(-1.1,2.0,5.75);
   const carry=new THREE.Vector3(-1.1,1.95,8.55);
   const drop=new THREE.Vector3(-1.1,1.32,9.45);
