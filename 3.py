@@ -571,7 +571,7 @@ function animate(){{
  detectFrame.material.opacity=.55+.45*Math.sin(t*3);
  detectBeam.intensity=4+1.5*Math.sin(t*4);
  controls.update();renderer.render(scene,camera);
-}
+}}
 animate();
 showLoadingDone();
 addEventListener('resize',()=>{{
