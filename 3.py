@@ -3,7 +3,7 @@ import streamlit.components.v1 as components
 from datetime import datetime
 
 st.set_page_config(
-    page_title="智能工厂数字孪生平台｜修复穿模版",
+    page_title="智能工厂数字孪生平台｜零件改版+多机床版",
     page_icon="🏭",
     layout="wide",
     initial_sidebar_state="collapsed"
@@ -149,9 +149,10 @@ background:rgba(3,35,44,.94);border:1px solid #16d9df;box-shadow:0 0 20px #087b8
   <div class="panel-title">设备运行监控 <span>DEVICE MONITOR</span></div>
   <div class="section-label">生产线设备列表</div>
   <div class="device selected" onclick="selectDevice(this,'数控加工中心 A01')"><span><i class="dot" id="dotA01"></i>数控加工中心 A01</span><b class="status" id="statA01">运行中</b></div>
+  <div class="device" onclick="selectDevice(this,'数控加工中心 A02')"><span><i class="dot" id="dotA02"></i>数控加工中心 A02</span><b class="status" id="statA02">运行中</b></div>
+  <div class="device" onclick="selectDevice(this,'数控加工中心 A03')"><span><i class="dot warn" id="dotA03"></i>数控加工中心 A03</span><b class="status warn" id="statA03">待机</b></div>
   <div class="device" onclick="selectDevice(this,'数控车床 B02')"><span><i class="dot" id="dotB02"></i>数控车床 B02</span><b class="status" id="statB02">运行中</b></div>
-  <div class="device" onclick="selectDevice(this,'智能机械臂 C03')"><span><i class="dot warn" id="dotC03"></i>智能机械臂 C03</span><b class="status warn" id="statC03">待机</b></div>
-  <div class="device" onclick="selectDevice(this,'自动传送线 D04')"><span><i class="dot" id="dotD04"></i>自动传送线 D04</span><b class="status" id="statD04">运行中</b></div>
+  <div class="device" onclick="selectDevice(this,'数控车床 B03')"><span><i class="dot" id="dotB03"></i>数控车床 B03</span><b class="status" id="statB03">运行中</b></div>
   <div class="device" onclick="selectDevice(this,'检测工作站 E05')"><span><i class="dot off" id="dotE05"></i>检测工作站 E05</span><b class="status off" id="statE05">离线</b></div>
   <div class="section-label">设备实时参数</div>
   <div class="metric-grid">
@@ -282,9 +283,10 @@ function toggleDeviceState(){
  const devName = selectedDeviceName;
  let dotId, statId;
  if(devName.indexOf("A01")>-1){dotId="dotA01";statId="statA01";}
+ else if(devName.indexOf("A02")>-1){dotId="dotA02";statId="statA02";}
+ else if(devName.indexOf("A03")>-1){dotId="dotA03";statId="statA03";}
  else if(devName.indexOf("B02")>-1){dotId="dotB02";statId="statB02";}
- else if(devName.indexOf("C03")>-1){dotId="dotC03";statId="statC03";}
- else if(devName.indexOf("D04")>-1){dotId="dotD04";statId="statD04";}
+ else if(devName.indexOf("B03")>-1){dotId="dotB03";statId="statB03";}
  else if(devName.indexOf("E05")>-1){dotId="dotE05";statId="statE05";}
  else {showToast("未匹配设备");return;}
  const dot = id(dotId);
@@ -324,7 +326,7 @@ function openPanel(type){
  }else if(type==='inspect'){
   title.textContent='设备巡检任务';
   body.innerHTML=`
-  <p>巡检对象：A01 数控加工中心、CAM-01 工业相机、传送带 D04、机械臂 C03</p>
+  <p>巡检对象：A01、A02、A03、B02、B03、E05、CAM-01、传送带 D04、机械臂 C03</p>
   <p>巡检项目：设备在线状态、温度、运行负载、相机画面、输送线运行情况。</p>
   <p id="inspectResult">待执行巡检。</p>
   <button class="action" onclick="runInspection()">开始巡检</button>`;
@@ -333,7 +335,7 @@ function openPanel(type){
 }
 function runInspection(){
  const resEl = id('inspectResult');
- resEl.textContent = "✅ 巡检完成：A01运行正常，B02运行正常，C03待机，D04运行正常，E05离线；相机通信正常，无异常报警。";
+ resEl.textContent = "✅ 巡检完成：A01运行正常，A02运行正常，A03待机，B02运行正常，B03运行正常，E05离线；相机通信正常，无异常报警。";
  showToast("设备巡检已完成");
 }
 function closePanel(e){if(!e||e.target.id==='modalMask')id('modalMask').classList.remove('show');}
@@ -374,14 +376,14 @@ scene.background=new THREE.Color(0x061722);
 scene.fog=new THREE.Fog(0x061722,24,65);
 
 const camera=new THREE.PerspectiveCamera(43,innerWidth/innerHeight,.1,150);
-camera.position.set(18,14,22);
+camera.position.set(20,16,24);
 const controls=new OrbitControls(camera,renderer.domElement);
-controls.target.set(1.5,1.1,1.0);
+controls.target.set(0,1,0);
 controls.enableDamping=true;
 controls.enablePan=true;
 controls.minDistance=12;controls.maxDistance=42;
 controls.maxPolarAngle=Math.PI*.48;
-const defaultCameraPosition=new THREE.Vector3(17,15,23);
+const defaultCameraPosition=new THREE.Vector3(20,16,24);
 window.addEventListener('reset-twin-camera',()=>{
  camera.position.copy(defaultCameraPosition);controls.target.set(0,1,0);controls.update();
 });
@@ -452,10 +454,80 @@ function makeMachine(x,z,label){
  return g;
 }
 
+// 数控车床
+function makeLathe(x,z,label){
+ const g=new THREE.Group();
+ g.position.set(x,0,z);
+ scene.add(g);
+
+ box(g,0,0.42,0,3.6,0.84,2.4,dark);
+ for(let dx of [-1.5,1.5]) for(let dz of [-1.0,1.0]){
+    box(g,dx,0.13,dz,0.4,0.24,0.4,blackPlastic);
+ }
+
+ box(g,0,1.35,0,3.2,1.45,2.1,steel);
+ box(g,0,1.42,1.20,2.8,1.25,0.10,steel);
+ box(g,0,1.44,1.26,2.6,1.18,0.05,glass,false);
+
+ box(g,-1.1,2.15,0,0.95,1.05,0.85,dark);
+ cyl(g,0.28,0.28,0.55,steel,-1.1,2.68,0);
+
+ box(g,1.5,1.55,0.4,0.20,0.78,0.65,blackPlastic);
+ box(g,1.52,1.60,0.45,0.12,0.58,0.42,glow,false);
+
+ box(g,0,3.15,0,0.65,0.28,0.65,dark);
+ cyl(g,0.12,0.12,0.50,steel,0,3.62,0);
+ cyl(g,0.10,0.10,0.20,redAlert,0,3.98,0);
+ cyl(g,0.10,0.10,0.20,mat(0xffcc22,.5,.2),0,4.24,0);
+ cyl(g,0.10,0.10,0.20,mat(0x30dd60,.5,.2),0,4.50,0);
+
+ box(g,1.8,1.48,-0.7,0.07,1.0,1.7,yellow,false);
+
+ g.userData.label=label;
+ return g;
+}
+
+// 检测工作站
+function makeStation(x,z,label){
+ const g=new THREE.Group();
+ g.position.set(x,0,z);
+ scene.add(g);
+
+ box(g,0,0.40,0,3.4,0.80,2.6,dark);
+ for(let dx of [-1.4,1.4]) for(let dz of [-1.1,1.1]){
+    box(g,dx,0.12,dz,0.42,0.22,0.42,blackPlastic);
+ }
+
+ box(g,0,1.30,0,3.0,1.30,2.2,steel);
+ box(g,0,1.38,1.30,2.6,1.18,0.10,steel);
+ box(g,0,1.42,1.36,2.4,1.08,0.05,glass,false);
+
+ box(g,0,2.35,0,1.2,1.0,0.9,dark);
+ cyl(g,0.18,0.18,0.40,steel,0,2.90,0);
+
+ box(g,1.6,1.48,0.4,0.22,0.82,0.68,blackPlastic);
+ box(g,1.62,1.54,0.46,0.13,0.60,0.44,glow,false);
+
+ box(g,0,3.30,0,0.70,0.30,0.70,dark);
+ cyl(g,0.13,0.13,0.55,steel,0,3.80,0);
+ cyl(g,0.11,0.11,0.22,redAlert,0,4.18,0);
+ cyl(g,0.11,0.11,0.22,mat(0xffcc22,.5,.2),0,4.46,0);
+ cyl(g,0.11,0.11,0.22,mat(0x30dd60,.5,.2),0,4.74,0);
+
+ box(g,-1.7,1.40,0,0.07,1.1,1.9,yellow,false);
+
+ g.userData.label=label;
+ return g;
+}
+
+// 6台机床布局：3台CNC + 2台车床 + 1台检测站
 const machines=[
  makeMachine(7,4,'数控加工中心 A01'),
- makeMachine(7,-5,'数控车床 B02'),
- makeMachine(-7,-5,'精密检测工作站 E05')
+ makeMachine(7,-4,'数控加工中心 A02'),
+ makeMachine(-7,4,'数控加工中心 A03'),
+ makeLathe(7,-10,'数控车床 B02'),
+ makeLathe(-7,-10,'数控车床 B03'),
+ makeStation(-7,-4,'检测工作站 E05')
 ];
 
 //传送带
@@ -471,55 +543,85 @@ box(scene,-1.1,.92,4.55,12.0,.12,.10,steel);
 box(scene,-1.1,.92,6.15,12.0,.12,.10,steel);
 box(scene,5.25,.78,5.35,.45,.18,1.55,yellow);
 
-// 修改后：降低高度，解决夹爪穿模
+// 参考图片零件：中心圆盘 + 双侧圆柱轴 + 侧翼结构
 function makeMetalPart(){
  const g=new THREE.Group();
- const aluminum=new THREE.MeshStandardMaterial({color:0xf1f4f5,metalness:0.82,roughness:0.24});
- const darkAluminum=new THREE.MeshStandardMaterial({color:0xd7dce0,metalness:0.8,roughness:0.28});
- const holeMat=new THREE.MeshStandardMaterial({color:0xbcc4c8,metalness:0.75,roughness:0.32});
 
- const base=new THREE.Mesh(new THREE.BoxGeometry(0.92,0.28,0.76),aluminum);
- base.castShadow=true;base.receiveShadow=true;g.add(base);
+ // 主铝合金材质
+ const aluminum=new THREE.MeshStandardMaterial({color:0xf1f4f5,metalness:0.86,roughness:0.22});
+ const darkAluminum=new THREE.MeshStandardMaterial({color:0xd7dce0,metalness:0.82,roughness:0.26});
+ const holeMat=new THREE.MeshStandardMaterial({color:0xbcc4c8,metalness:0.78,roughness:0.30});
+ const sideMat=new THREE.MeshStandardMaterial({color:0xe6e9eb,metalness:0.84,roughness:0.24});
 
- const smallBoss=new THREE.Mesh(new THREE.CylinderGeometry(0.12,0.13,0.24,28),aluminum);
- smallBoss.position.set(-0.26,0.44,0.0);
- smallBoss.castShadow=true;g.add(smallBoss);
+ // 1. 中心矩形主体
+ const body=new THREE.Mesh(new THREE.BoxGeometry(0.80,0.30,0.74),aluminum);
+ body.castShadow=true;body.receiveShadow=true;g.add(body);
 
- const pocketA=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.08,0.20),darkAluminum);
- pocketA.position.set(-0.28,0.34,-0.26);
- g.add(pocketA);
+ // 2. 中心圆盘
+ const centerDisc=new THREE.Mesh(new THREE.CylinderGeometry(0.24,0.25,0.34,40),aluminum);
+ centerDisc.rotation.x=Math.PI/2;
+ centerDisc.position.set(0,0.47,0);
+ centerDisc.castShadow=true;g.add(centerDisc);
 
- const bigBoss=new THREE.Mesh(new THREE.CylinderGeometry(0.22,0.23,0.30,28),aluminum);
- bigBoss.position.set(0.24,0.48,0.16);
- bigBoss.castShadow=true;g.add(bigBoss);
-
- const bigHole=new THREE.Mesh(new THREE.CylinderGeometry(0.11,0.12,0.32,28),holeMat);
- bigHole.position.set(0.24,0.48,0.16);
- g.add(bigHole);
-
- const roundPocket=new THREE.Mesh(new THREE.CylinderGeometry(0.15,0.16,0.10,28),darkAluminum);
- roundPocket.position.set(-0.04,0.37,-0.08);
- g.add(roundPocket);
-
- const centerHole=new THREE.Mesh(new THREE.CylinderGeometry(0.045,0.05,0.12,20),holeMat);
- centerHole.position.set(-0.04,0.37,-0.08);
+ // 3. 中心圆盘孔
+ const centerHole=new THREE.Mesh(new THREE.CylinderGeometry(0.10,0.11,0.36,32),holeMat);
+ centerHole.rotation.x=Math.PI/2;
+ centerHole.position.set(0,0.47,0);
  g.add(centerHole);
 
- const shallowPocket=new THREE.Mesh(new THREE.CylinderGeometry(0.16,0.17,0.08,28),darkAluminum);
- shallowPocket.position.set(0.24,0.34,-0.22);
- g.add(shallowPocket);
+ // 4. 前侧短圆柱轴
+ const frontPin=new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.09,0.42,24),sideMat);
+ frontPin.rotation.x=Math.PI/2;
+ frontPin.position.set(0,0.40,0.44);
+ frontPin.castShadow=true;g.add(frontPin);
 
- const stepPad=new THREE.Mesh(new THREE.BoxGeometry(0.44,0.10,0.36),darkAluminum);
- stepPad.position.set(0.10,0.14,0.0);
- g.add(stepPad);
+ // 5. 后侧长圆柱轴
+ const backPin=new THREE.Mesh(new THREE.CylinderGeometry(0.10,0.11,0.70,24),sideMat);
+ backPin.rotation.x=Math.PI/2;
+ backPin.position.set(0,0.40,-0.58);
+ backPin.castShadow=true;g.add(backPin);
 
- const sideTrim=new THREE.Mesh(new THREE.BoxGeometry(0.07,0.18,0.62),aluminum);
- sideTrim.position.set(-0.42,0.40,0.0);
- g.add(sideTrim);
+ // 6. 左侧侧翼三角块
+ const leftWingShape=[
+   new THREE.Vector3(-0.40,0.15,-0.22),
+   new THREE.Vector3(-0.94,0.15,0.18),
+   new THREE.Vector3(-0.40,0.15,0.42)
+ ];
+ const leftWingGeo=new THREE.CylinderGeometry(0.14,0.14,0.30,3,1,true,0,Math.PI);
+ const leftWing=new THREE.Mesh(leftWingGeo,sideMat);
+ leftWing.rotation.z=Math.PI/2;
+ leftWing.position.set(-0.40,0.40,0.10);
+ leftWing.castShadow=true;g.add(leftWing);
 
- const frontStep=new THREE.Mesh(new THREE.BoxGeometry(0.34,0.10,0.10),darkAluminum);
- frontStep.position.set(0.12,0.34,0.30);
- g.add(frontStep);
+ // 7. 右侧侧翼三角块
+ const rightWing=new THREE.Mesh(leftWingGeo,sideMat);
+ rightWing.rotation.z=-Math.PI/2;
+ rightWing.position.set(0.40,0.40,0.10);
+ rightWing.castShadow=true;g.add(rightWing);
+
+ // 8. 侧翼连接块
+ const leftConnect=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.22,0.40),darkAluminum);
+ leftConnect.position.set(-0.28,0.40,0.10);
+ g.add(leftConnect);
+
+ const rightConnect=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.22,0.40),darkAluminum);
+ rightConnect.position.set(0.28,0.40,0.10);
+ g.add(rightConnect);
+
+ // 9. 底部加强底座
+ const basePad=new THREE.Mesh(new THREE.BoxGeometry(0.46,0.12,0.34),darkAluminum);
+ basePad.position.set(0,0.17,0);
+ g.add(basePad);
+
+ // 10. 前侧小圆柱凸起
+ const frontBoss=new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.08,0.18,20),sideMat);
+ frontBoss.position.set(0.20,0.40,0.36);
+ frontBoss.castShadow=true;g.add(frontBoss);
+
+ // 11. 后侧小圆柱凸起
+ const backBoss=new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.08,0.18,20),sideMat);
+ backBoss.position.set(-0.20,0.40,-0.36);
+ backBoss.castShadow=true;g.add(backBoss);
 
  return g;
 }
@@ -663,7 +765,7 @@ for(let z of [-11,10])box(scene,0,9.8,z,27,.25,.25,steel);
 
 const lamps=[];
 machines.forEach((m,i)=>{
- const l=new THREE.Mesh(new THREE.SphereGeometry(.12,12,12),new THREE.MeshBasicMaterial({color:i===2?0xffb52e:0x13f2c1}));
+ const l=new THREE.Mesh(new THREE.SphereGeometry(.12,12,12),new THREE.MeshBasicMaterial({color:i===5?0xffb52e:0x13f2c1}));
  l.position.set(m.position.x,m.position.y+4.2,m.position.z);scene.add(l);lamps.push(l);
 });
 
@@ -680,7 +782,7 @@ function animate(){
  if(activePick){
   const p=activePick;p.userData.pickT+=.012*SIM_CONFIG.speedRate;const q=Math.min(p.userData.pickT,1);
   const p0=p.userData.pickStart;
-  const grip=new THREE.Vector3(-1.1,1.24,5.35); // 修改夹取高度适配新工件，解决穿模
+  const grip=new THREE.Vector3(-1.1,1.24,5.35);
   const lifted=new THREE.Vector3(-1.1,2.0,5.75);
   const carry=new THREE.Vector3(-1.1,1.95,8.55);
   const drop=new THREE.Vector3(-1.1,1.32,9.45);
