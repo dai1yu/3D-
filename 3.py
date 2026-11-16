@@ -3,7 +3,7 @@ import streamlit.components.v1 as components
 from datetime import datetime
 
 st.set_page_config(
-    page_title="智能工厂数字孪生平台｜优化版",
+    page_title="智能工厂数字孪生平台｜修复版",
     page_icon="🏭",
     layout="wide",
     initial_sidebar_state="collapsed"
@@ -75,6 +75,7 @@ border:1px solid rgba(27,170,185,.18);background:rgba(12,73,86,.18);font-size:11
 .dot.off{background:#768a91;box-shadow:none}
 .status{color:#39e9bd;font-size:10px}
 .status.warn{color:#ffc15b}
+.status.off{color:#88989e}
 
 .metric-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .metric{padding:10px 8px;background:rgba(10,72,86,.28);border:1px solid rgba(27,184,195,.23);min-height:67px}
@@ -147,11 +148,11 @@ background:rgba(3,35,44,.94);border:1px solid #16d9df;box-shadow:0 0 20px #087b8
 <div class="panel left">
   <div class="panel-title">设备运行监控 <span>DEVICE MONITOR</span></div>
   <div class="section-label">生产线设备列表</div>
-  <div class="device selected" onclick="selectDevice(this,'数控加工中心 A01')"><span><i class="dot"></i>数控加工中心 A01</span><b class="status">运行中</b></div>
-  <div class="device" onclick="selectDevice(this,'数控车床 B02')"><span><i class="dot"></i>数控车床 B02</span><b class="status">运行中</b></div>
-  <div class="device" onclick="selectDevice(this,'智能机械臂 C03')"><span><i class="dot warn"></i>智能机械臂 C03</span><b class="status warn">待机</b></div>
-  <div class="device" onclick="selectDevice(this,'自动传送线 D04')"><span><i class="dot"></i>自动传送线 D04</span><b class="status">运行中</b></div>
-  <div class="device" onclick="selectDevice(this,'检测工作站 E05')"><span><i class="dot off"></i>检测工作站 E05</span><b class="status">离线</b></div>
+  <div class="device selected" onclick="selectDevice(this,'数控加工中心 A01')"><span><i class="dot" id="dotA01"></i>数控加工中心 A01</span><b class="status" id="statA01">运行中</b></div>
+  <div class="device" onclick="selectDevice(this,'数控车床 B02')"><span><i class="dot" id="dotB02"></i>数控车床 B02</span><b class="status" id="statB02">运行中</b></div>
+  <div class="device" onclick="selectDevice(this,'智能机械臂 C03')"><span><i class="dot warn" id="dotC03"></i>智能机械臂 C03</span><b class="status warn" id="statC03">待机</b></div>
+  <div class="device" onclick="selectDevice(this,'自动传送线 D04')"><span><i class="dot" id="dotD04"></i>自动传送线 D04</span><b class="status" id="statD04">运行中</b></div>
+  <div class="device" onclick="selectDevice(this,'检测工作站 E05')"><span><i class="dot off" id="dotE05"></i>检测工作站 E05</span><b class="status off" id="statE05">离线</b></div>
   <div class="section-label">设备实时参数</div>
   <div class="metric-grid">
     <div class="metric"><label>主轴转速</label><strong id="rpm">3200</strong><em>rpm</em></div>
@@ -224,6 +225,7 @@ const SIM_CONFIG = {
 };
 let sortLogRecords = [];
 let audioCtx = null;
+let SIM_RUNNING = SIM_CONFIG.autoStart;
 
 function playBeepAlert(){
     if(!SIM_CONFIG.soundAlert) return;
@@ -254,38 +256,85 @@ updateClock();setInterval(updateClock,1000);
 
 function toggleAuto(){
  auto=!auto;
+ SIM_RUNNING = auto;
  const b=id('autoBtn');
  b.classList.toggle('active',auto);
  b.textContent=auto?'自动监测':'暂停监测';
- showToast(auto?'已开启自动监测':'已暂停自动监测');
+ showToast(auto?'✅ 已开启自动监测，产线开始运行':'⏸️ 已暂停自动监测，产线停止');
 }
 
+let selectedDeviceName = "";
 function selectDevice(el,name){
+ selectedDeviceName = name;
  document.querySelectorAll('.device').forEach(x=>x.classList.remove('selected'));
  el.classList.add('selected');
  id('modalTitle').textContent=name;
- id('modalBody').innerHTML='<p>设备状态：运行中</p><p>所属产线：智能加工生产线 01</p><p>当前工序：工件输送 / 自动加工</p><p>提示：当前参数为界面演示数据，接入真实设备后可显示现场数据。</p><button class="action" onclick="showToast(\'已发送设备状态刷新请求\')">刷新设备数据</button><button class="action" onclick="toggleDeviceState(this)">切换启停状态</button>';
+ id('modalBody').innerHTML=`
+ <p>设备名称：${name}</p>
+ <p>所属产线：智能加工生产线 01</p>
+ <p>当前状态：<span id="devStateText">运行中</span></p>
+ <p>提示：点击下方按钮切换启停状态</p>
+ <button class="action" onclick="refreshDeviceData()">刷新设备数据</button>
+ <button class="action" onclick="toggleDeviceState()">切换启停状态</button>`;
  openPanel('device');
 }
-function toggleDeviceState(btn){
- const running=btn.textContent.includes('切换启停');
- btn.textContent=running?'设备已暂停（点击恢复）':'切换启停状态';
- showToast(running?'演示设备已暂停':'演示设备已恢复运行');
+function toggleDeviceState(){
+ const devName = selectedDeviceName;
+ let dotId, statId;
+ if(devName.indexOf("A01")>-1){dotId="dotA01";statId="statA01";}
+ else if(devName.indexOf("B02")>-1){dotId="dotB02";statId="statB02";}
+ else if(devName.indexOf("C03")>-1){dotId="dotC03";statId="statC03";}
+ else if(devName.indexOf("D04")>-1){dotId="dotD04";statId="statD04";}
+ else if(devName.indexOf("E05")>-1){dotId="dotE05";statId="statE05";}
+ else {showToast("未匹配设备");return;}
+ const dot = id(dotId);
+ const stat = id(statId);
+ const stateText = id("devStateText");
+ if(dot.classList.contains("off")){
+    dot.className="dot";
+    stat.className="status";
+    stat.innerText="运行中";
+    stateText.innerText="运行中";
+    showToast(devName+" 已启动");
+ }else{
+    dot.className="dot off";
+    stat.className="status off";
+    stat.innerText="已停止";
+    stateText.innerText="已停止";
+    showToast(devName+" 已停机");
+ }
+}
+function refreshDeviceData(){
+ id('rpm').textContent=3200+Math.floor(Math.random()*45-22);
+ id('load').textContent=66+Math.floor(Math.random()*6);
+ id('temp').textContent=(36.3+Math.random()*.6).toFixed(1);
+ showToast("🔄 设备数据已刷新");
 }
 function openPanel(type){
  const mask=id('modalMask'),title=id('modalTitle'),body=id('modalBody');
  if(type==='monitor'){
   title.textContent='生产线数据监测';
-  body.innerHTML='<p>主轴转速：'+id('rpm').textContent+' rpm</p><p>主轴负载：'+id('load').textContent+'%</p><p>设备温度：'+id('temp').textContent+' ℃</p><p>视觉相机：CAM-01 在线</p><p>检测结果为演示数据；接入 ONNX 模型后显示真实识别类别与置信度。</p>';
+  body.innerHTML=`
+  <p>主轴转速：${id('rpm').textContent} rpm</p>
+  <p>主轴负载：${id('load').textContent}%</p>
+  <p>设备温度：${id('temp').textContent} ℃</p>
+  <p>视觉相机：CAM-01 在线</p>
+  <p>检测结果为演示数据；接入 ONNX 模型后显示真实识别类别与置信度。</p>
+  <button class="action" onclick="refreshDeviceData()">刷新实时参数</button>`;
  }else if(type==='inspect'){
   title.textContent='设备巡检任务';
-  body.innerHTML='<p>巡检对象：A01 数控加工中心、CAM-01 工业相机、传送带 D04、机械臂 C03</p><p>巡检项目：设备在线状态、温度、运行负载、相机画面、输送线运行情况。</p><p id="inspectResult">待执行巡检。</p><button class="action" onclick="runInspection()">开始巡检</button>';
+  body.innerHTML=`
+  <p>巡检对象：A01 数控加工中心、CAM-01 工业相机、传送带 D04、机械臂 C03</p>
+  <p>巡检项目：设备在线状态、温度、运行负载、相机画面、输送线运行情况。</p>
+  <p id="inspectResult">待执行巡检。</p>
+  <button class="action" onclick="runInspection()">开始巡检</button>`;
  }
  mask.classList.add('show');
 }
 function runInspection(){
- id('inspectResult').textContent='巡检完成：演示环境下设备状态正常，相机在线，输送线运行中。';
- showToast('设备巡检已完成');
+ const resEl = id('inspectResult');
+ resEl.textContent = "✅ 巡检完成：A01运行正常，B02运行正常，C03待机，D04运行正常，E05离线；相机通信正常，无异常报警。";
+ showToast("设备巡检已完成");
 }
 function closePanel(e){if(!e||e.target.id==='modalMask')id('modalMask').classList.remove('show');}
 function resetCameraView(){window.dispatchEvent(new Event('reset-twin-camera'));showToast('3D视角已复位');}
@@ -296,9 +345,7 @@ function showToast(msg){
 
 setInterval(()=>{
  if(!auto)return;
- id('rpm').textContent=3200+Math.floor(Math.random()*45-22);
- id('load').textContent=66+Math.floor(Math.random()*6);
- id('temp').textContent=(36.3+Math.random()*.6).toFixed(1);
+ refreshDeviceData();
 },1800);
 
 window.addEventListener('load',()=>{
@@ -424,7 +471,7 @@ box(scene,-1.1,.92,4.55,12.0,.12,.10,steel);
 box(scene,-1.1,.92,6.15,12.0,.12,.10,steel);
 box(scene,5.25,.78,5.35,.45,.18,1.55,yellow);
 
-// 优化后的加工工件，缩小尺寸，防止重叠
+// 标准工件模型，尺寸固定
 function makeMetalPart(){
  const g=new THREE.Group();
  const aluminum=new THREE.MeshStandardMaterial({color:0xf1f4f5,metalness:0.82,roughness:0.24});
@@ -473,19 +520,24 @@ function makeMetalPart(){
  return g;
 }
 
+// 严格固定工件初始位置，间距拉大，防止重叠
 const workpieces=[];
+const BASE_Y = 1.02;
+const START_X = 5.6;
+const STEP_X = 2.8;
 for(let i=0;i<4;i++){
  const group=makeMetalPart();
- group.position.set(5.6-i*2.95,1.02,5.35);
+ const initX = START_X - i * STEP_X;
+ group.position.set(initX, BASE_Y, 5.35);
  scene.add(group);
  group.userData={
    index:i,
-   offset:i*2.95,
+   initX: initX,
    state:'moving',
    bad:Math.random()<SIM_CONFIG.defectRate,
    missing:false,
    classified:false,
-   baseY:1.02
+   baseY: BASE_Y
  };
  workpieces.push(group);
 }
@@ -566,6 +618,7 @@ function updateProductionBoard(){
  const totalAll=1286+totalDetected;
  const goodAll=1264+goodDetected;
  el('yieldRate').textContent=totalAll>0 ? (goodAll/totalAll*100).toFixed(1):"0.0";
+ el('detectCount').textContent = totalDetected;
 }
 function logSort(message){
  const now=new Date().toLocaleTimeString();
@@ -577,6 +630,7 @@ function logSort(message){
 function classifyPart(part){
  if(part.userData.classified)return;
  part.userData.classified=true;totalDetected++;
+ id('detectState').innerText = "已识别";
  if(part.userData.bad){
   badDetected++;
   if(part.userData.missing)missingDetected++;
@@ -612,6 +666,12 @@ machines.forEach((m,i)=>{
 function animate(){
  requestAnimationFrame(animate);
  const t=performance.now()*.001 * SIM_CONFIG.speedRate;
+
+ // 只有自动开启时才运行仿真
+ if(!SIM_RUNNING){
+    controls.update();renderer.render(scene,camera);
+    return;
+ }
 
  if(activePick){
   const p=activePick;p.userData.pickT+=.012*SIM_CONFIG.speedRate;const q=Math.min(p.userData.pickT,1);
@@ -656,11 +716,15 @@ function animate(){
   if(part.userData.state==='stored'){
    part.userData.storedT=(part.userData.storedT||0)+.016*SIM_CONFIG.speedRate;
    if(part.userData.storedT>1.35){
-    part.position.set(5.6,part.userData.baseY,5.35);part.visible=true;
-    part.userData.classified=false;part.userData.state='moving';
+    // 复位强制回到初始坐标，Y固定，杜绝漂移重叠
+    part.position.set(part.userData.initX, part.userData.baseY, 5.35);
+    part.visible=true;
+    part.userData.classified=false;
+    part.userData.state='moving';
     part.userData.bad=Math.random()<SIM_CONFIG.defectRate;
     part.userData.missing=part.userData.bad&&Math.random()<0.5;
-    part.userData.pickT=0;part.userData.storedT=0;
+    part.userData.pickT=0;
+    part.userData.storedT=0;
    }
    return;
   }
@@ -672,6 +736,7 @@ function animate(){
   if(part.userData.state==='moving'||part.userData.state==='passed'){
    //工件从右向左移动
    part.position.x-=0.012*SIM_CONFIG.speedRate;
+   part.position.y = part.userData.baseY; // 强制锁定Y，防止上下飘
 
    if(!part.userData.classified&&part.position.x<=-1.1){
     if(activePick&&part.userData.bad){
@@ -685,14 +750,15 @@ function animate(){
    }
 
    if(part.position.x<-6.2){
-    part.position.x=5.6;
-    part.position.y=part.userData.baseY;
+    // 循环复位，严格使用初始位置
+    part.position.set(part.userData.initX, part.userData.baseY, 5.35);
     part.userData.classified=false;
     part.userData.state='moving';
     part.userData.bad=Math.random()<SIM_CONFIG.defectRate;
     part.userData.missing=part.userData.bad&&Math.random()<0.5;
     part.userData.pickT=0;
     part.visible=true;
+    id('detectState').innerText = "待检测";
    }
   }
  });
