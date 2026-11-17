@@ -328,75 +328,8 @@ box(scene,BELT_X,.92,BELT_Z-.80,BELT_LENGTH-.2,.12,.10,steel);
 box(scene,BELT_X,.92,BELT_Z+.80,BELT_LENGTH-.2,.12,.10,steel);
 box(scene,BELT_RIGHT-.25,.78,BELT_Z,.45,.18,1.55,yellow);
 
-// =====================================================
-// 传送带最左端收纳盒：开放式工业金属周转料箱
-// +X侧朝向传送带，方便工件从导料板滑入
-// =====================================================
-const storageBox = new THREE.Group();
-storageBox.position.set(BELT_LEFT - 2.05, 0, BELT_Z);
-scene.add(storageBox);
-
-const binOuterMat = new THREE.MeshStandardMaterial({
- color:0x344b55, metalness:.84, roughness:.32
-});
-const binInnerMat = new THREE.MeshStandardMaterial({
- color:0x111e24, metalness:.55, roughness:.48
-});
-const binRimMat = new THREE.MeshStandardMaterial({
- color:0x9aa9ad, metalness:.94, roughness:.22
-});
-const binAccentMat = new THREE.MeshStandardMaterial({
- color:0x13a8b7, metalness:.72, roughness:.28,
- emissive:0x06343a
-});
-
-// 箱底与防滑内衬
-box(storageBox,0,.28,0,3.25,.34,2.35,binOuterMat);
-box(storageBox,0,.465,0,2.94,.035,2.04,binInnerMat);
-
-// 后挡板及两侧挡板，朝向传送带的一端保持敞开
-box(storageBox,-1.53,.91,0,.19,1.12,2.35,binOuterMat);
-box(storageBox,0,.88,-1.08,3.12,1.02,.19,binOuterMat);
-box(storageBox,0,.88,1.08,3.12,1.02,.19,binOuterMat);
-
-// 箱口金属包边
-box(storageBox,-1.53,1.49,0,.25,.085,2.34,binRimMat);
-box(storageBox,0,1.49,-1.08,3.18,.085,.25,binRimMat);
-box(storageBox,0,1.49,1.08,3.18,.085,.25,binRimMat);
-
-// 外侧加强筋
-for(const x of [-1.05,-.35,.35,1.05]){
- box(storageBox,x,.82,-1.19,.10,.72,.075,binRimMat);
- box(storageBox,x,.82,1.19,.10,.72,.075,binRimMat);
-}
-
-// 底部支撑脚
-for(const x of [-1.20,1.20]){
- for(const z of [-.82,.82]){
-  box(storageBox,x,.09,z,.32,.18,.32,binOuterMat);
- }
-}
-
-// 正面铭牌及状态色条
-box(storageBox,-.20,.78,1.185,1.08,.28,.035,binInnerMat);
-box(storageBox,-.20,.91,1.207,.78,.035,.018,binAccentMat);
-
-// 传送带与收纳盒之间的金属导料滑槽
-const feedChute = new THREE.Mesh(
- new THREE.BoxGeometry(1.35,.12,1.48),
- new THREE.MeshStandardMaterial({
-  color:0x71858b, metalness:.90, roughness:.26
- })
-);
-feedChute.position.set(BELT_LEFT-.55,.60,BELT_Z);
-feedChute.rotation.z=-.08;
-feedChute.castShadow=true;
-feedChute.receiveShadow=true;
-scene.add(feedChute);
-
-
 // 透明树脂/亚克力精密异形工件：参考用户图片的中央圆形凸台、双侧圆柱、
-// 三角形安装翼、立式加强片与圆孔结构
+ // 三角形安装翼、立式加强片与圆孔结构
 const workpieces=[];
 const acrylic=new THREE.MeshPhysicalMaterial({
  color:0xdce8e7,metalness:.18,roughness:.19,transmission:.42,
@@ -409,127 +342,53 @@ const acrylicEdge=new THREE.MeshStandardMaterial({
 const innerMetal=mat(0x8b9da0,.78,.2),darkHole=mat(0x101a20,.25,.5);
 function makeReferencePart(){
  const part=new THREE.Group();
-
- // 精密加工铝合金方形零件：银色金属表面、中心圆形沉孔、
- // 六角定位孔、四角安装凸台及环形加工槽
- const bodyMat=new THREE.MeshStandardMaterial({
-  color:0x9ca5a8, metalness:.94, roughness:.24
- });
- const topMat=new THREE.MeshStandardMaterial({
-  color:0xc5cbcd, metalness:.96, roughness:.19
- });
- const edgeMat=new THREE.MeshStandardMaterial({
-  color:0x687277, metalness:.92, roughness:.29
- });
- const grooveMat=new THREE.MeshStandardMaterial({
-  color:0x252d31, metalness:.82, roughness:.32
- });
- const brightMat=new THREE.MeshStandardMaterial({
-  color:0xe1e5e6, metalness:.98, roughness:.16
- });
-
- function add(geo,material,x,y,z,rx=0,ry=0,rz=0){
-  const mesh=new THREE.Mesh(geo,material);
-  mesh.position.set(x,y,z);
-  mesh.rotation.set(rx,ry,rz);
-  mesh.castShadow=true;
-  mesh.receiveShadow=true;
-  part.add(mesh);
-  return mesh;
+ function addMesh(geo,material,x,y,z,rx=0,ry=0,rz=0){
+  const m=new THREE.Mesh(geo,material);m.position.set(x,y,z);m.rotation.set(rx,ry,rz);
+  m.castShadow=true;m.receiveShadow=true;part.add(m);return m;
  }
-
- // 方形主体底板，圆角倒边
- const shape=new THREE.Shape();
- const w=1.02, r=.16;
- shape.moveTo(-w+r,-w);
- shape.lineTo(w-r,-w);
- shape.quadraticCurveTo(w,-w,w,-w+r);
- shape.lineTo(w,w-r);
- shape.quadraticCurveTo(w,w,w-r,w);
- shape.lineTo(-w+r,w);
- shape.quadraticCurveTo(-w,w,-w,w-r);
- shape.lineTo(-w,-w+r);
- shape.quadraticCurveTo(-w,-w,-w+r,-w);
- const plateGeo=new THREE.ExtrudeGeometry(shape,{
-  depth:.18, bevelEnabled:true, bevelSegments:3,
-  steps:1, bevelSize:.045, bevelThickness:.035, curveSegments:12
- });
- add(plateGeo,bodyMat,0,-.09,0,-Math.PI/2,0,0);
-
- // 上表面薄金属盖板
- add(new THREE.BoxGeometry(1.88,.035,1.88),topMat,0,.115,0);
-
- // 四角阶梯形安装台和螺栓孔
- for(const x of [-.73,.73]){
-  for(const z of [-.73,.73]){
-   add(new THREE.BoxGeometry(.42,.09,.42),edgeMat,x,.16,z);
-   add(new THREE.CylinderGeometry(.145,.16,.045,32),brightMat,x,.225,z);
-   add(new THREE.CylinderGeometry(.092,.092,.012,32),grooveMat,x,.252,z);
-   add(new THREE.CylinderGeometry(.052,.052,.014,6),edgeMat,x,.261,z);
-  }
+ function addPlate(points,y,thickness,material){
+  const s=new THREE.Shape();s.moveTo(points[0][0],points[0][1]);
+  for(let i=1;i<points.length;i++)s.lineTo(points[i][0],points[i][1]);
+  s.closePath();
+  const geo=new THREE.ExtrudeGeometry(s,{depth:thickness,bevelEnabled:true,bevelSegments:2,steps:1,bevelSize:.035,bevelThickness:.025});
+  return addMesh(geo,material,0,y+thickness,0,-Math.PI/2,0,0);
  }
-
- // 中央圆形加工台阶与深色沉孔
- add(new THREE.CylinderGeometry(.66,.70,.12,64),edgeMat,0,.19,0);
- add(new THREE.CylinderGeometry(.59,.62,.075,64),topMat,0,.275,0);
-
- add(new THREE.CylinderGeometry(.445,.46,.035,64),grooveMat,0,.315,0);
- add(new THREE.CylinderGeometry(.385,.40,.045,64),bodyMat,0,.342,0);
-
-
- // 中心六角凹槽及内孔
- add(new THREE.CylinderGeometry(.255,.255,.025,6),edgeMat,0,.375,0);
- add(new THREE.CylinderGeometry(.205,.205,.018,6),grooveMat,0,.391,0);
- add(new THREE.CylinderGeometry(.105,.105,.02,32),edgeMat,0,.402,0);
- add(new THREE.CylinderGeometry(.062,.062,.012,32),grooveMat,0,.414,0);
-
- // 四个方向的弧形加工槽，形成参考图的环绕式纹路
- for(let a=0;a<4;a++){
-  const angle=a*Math.PI/2;
-  const points=[];
-  for(let j=0;j<=18;j++){
-   const t=(-.72+j/18*1.44);
-   const rr=.77;
-   points.push(new THREE.Vector3(
-    Math.cos(angle)*rr + Math.cos(angle+Math.PI/2)*t*.42,
-    .151,
-    Math.sin(angle)*rr + Math.sin(angle+Math.PI/2)*t*.42
-   ));
-  }
-  const curve=new THREE.CatmullRomCurve3(points);
-  add(new THREE.TubeGeometry(curve,32,.025,8,false),edgeMat,0,0,0);
-  const highlightPoints=points.map(p=>new THREE.Vector3(p.x,.178,p.z));
-  const highlightCurve=new THREE.CatmullRomCurve3(highlightPoints);
-  add(new THREE.TubeGeometry(highlightCurve,32,.012,8,false),brightMat,0,0,0);
+ addPlate([[-.72,-.48],[-.38,-.70],[.45,-.66],[.82,-.28],[.70,.48],[.22,.68],[-.52,.58],[-.82,.12]],.02,.12,acrylic);
+ addPlate([[-.78,-.28],[-1.12,-.52],[-1.04,.30],[-.72,.46]],.04,.10,acrylicEdge);
+ addPlate([[.72,-.35],[1.12,-.50],[1.05,.32],[.70,.48]],.04,.10,acrylicEdge);
+ addPlate([[-.38,.38],[-.28,.98],[.18,1.16],[.38,.48]],.17,.10,acrylic);
+ addMesh(new THREE.CylinderGeometry(.49,.53,.22,48),acrylic,.02,.30,0);
+ addMesh(new THREE.CylinderGeometry(.36,.40,.10,48),acrylicEdge,.02,.46,0);
+ addMesh(new THREE.TorusGeometry(.34,.025,10,48),innerMetal,.02,.52,0);
+ addMesh(new THREE.CylinderGeometry(.235,.25,.035,40),darkHole,.02,.525,0);
+ addMesh(new THREE.TorusGeometry(.205,.028,10,40),acrylicEdge,.02,.55,0);
+ addMesh(new THREE.CylinderGeometry(.105,.12,.055,32),acrylic,.02,.57,0);
+ for(const side of [-1,1]){
+  addMesh(new THREE.CylinderGeometry(.145,.17,.92,32),acrylicEdge,side*.83,.35,0,0,0,Math.PI/2);
+  addMesh(new THREE.SphereGeometry(.145,24,16),acrylic,side*1.29,.35,0);
+  addMesh(new THREE.TorusGeometry(.155,.018,8,32),innerMetal,side*.48,.35,0,0,Math.PI/2,0);
  }
-
- // 四周短槽及端部定位凸台
- for(let a=0;a<4;a++){
-  const angle=a*Math.PI/2;
-  const x=Math.cos(angle)*.82;
-  const z=Math.sin(angle)*.82;
-  const slot=add(new THREE.BoxGeometry(.48,.018,.13),grooveMat,x,.145,z,0,-angle,0);
-  add(new THREE.BoxGeometry(.32,.012,.045),brightMat,x,.158,z,0,-angle,0);
+ addMesh(new THREE.CylinderGeometry(.12,.15,.50,28),acrylic,-.05,.30,-.72,Math.PI/2,0,0);
+ addMesh(new THREE.SphereGeometry(.12,20,14),acrylic,-.05,.30,-.97);
+ addMesh(new THREE.CylinderGeometry(.145,.145,.018,32),darkHole,.78,.17,.43);
+ addMesh(new THREE.TorusGeometry(.15,.025,10,32),acrylicEdge,.78,.19,.43);
+ for(const a of [-.58,.58])for(const b of [-.38,.38]){
+  addMesh(new THREE.CylinderGeometry(.035,.035,.018,16),innerMetal,a,.20,b);
+  addMesh(new THREE.CylinderGeometry(.012,.012,.02,12),darkHole,a,.212,b);
  }
-
- // 边缘小型定位孔
- for(const x of [-.48,.48]){
-  for(const z of [-.48,.48]){
-   add(new THREE.CylinderGeometry(.055,.055,.018,24),edgeMat,x,.16,z);
-   add(new THREE.CylinderGeometry(.027,.027,.02,24),grooveMat,x,.172,z);
-  }
+ for(let i=0;i<3;i++){
+  const rib=addMesh(new THREE.BoxGeometry(.045,.12,.72),acrylicEdge,-.56+i*.09,.17,-.02);
+  rib.rotation.y=-.22;
  }
-
  return part;
 }
 // 8件缩小后的工件，沿传送带上料端均匀排列
 for(let i=0;i<8;i++){
  const group=makeReferencePart();
- // 工件中心间距扩大到3.0，减少金属件边缘接触和穿模
- group.position.set(10.0-i*3.0,1.00,BELT_Z);
+ group.position.set(10.0-i*1.55,1.00,BELT_Z);
  group.scale.set(.58,.58,.58);
  scene.add(group);
- group.userData={index:i,offset:i*3.0,state:'moving',bad:i===5||i===6,missing:i===5,classified:false};
+ group.userData={index:i,offset:i*1.55,state:'moving',bad:i===5||i===6,missing:i===5,classified:false};
  workpieces.push(group);
 }
 // 工业相机改为传送带侧装：位于传送带前侧，镜头水平朝向检测区域
@@ -612,29 +471,6 @@ function updateProductionBoard(){
  el('rejectBinCount').textContent=rejectStored;el('yieldRate').textContent=((1264+goodDetected)/(1286+totalDetected)*100).toFixed(1);
 }
 function logSort(message){const el=document.getElementById('sortLog');if(el)el.innerHTML=message+'<br>'+el.innerHTML.split('<br>').slice(0,2).join('<br>');}
-
-// 工件补料安全检查：入口有足够空位才重新出现，避免重生时与其他工件重叠
-function tryRespawnPart(part){
- const spawnX=10.0;
- for(const other of workpieces){
-  if(other===part || !other.visible)continue;
-  if(other.userData.state==='stored' || other.userData.state==='waitingSpawn')continue;
-  if(Math.abs(other.position.x-spawnX)<3.0 &&
-     Math.abs(other.position.z-BELT_Z)<.45){
-   return false;
-  }
- }
- part.position.set(spawnX,1.02,BELT_Z);
- part.visible=true;
- part.userData.classified=false;
- part.userData.state='moving';
- part.userData.bad=Math.random()<.30;
- part.userData.missing=part.userData.bad&&Math.random()<.5;
- part.userData.pickT=0;
- part.userData.storedT=0;
- return true;
-}
-
 function classifyPart(part){
  if(part.userData.classified)return;
  part.userData.classified=true;totalDetected++;document.getElementById('detectCount').textContent=totalDetected;
@@ -651,24 +487,14 @@ function classifyPart(part){
  else{goodDetected++;part.userData.state='passed';logSort('<span style="color:#42e6bd">工件 #'+(part.userData.index+1)+' 检测合格，继续输送</span>');}
  updateProductionBoard();
 }
-// 厂房支撑架整体向后移动，六台机床本身的位置、尺寸和朝向不变
-// 相比原位置，前后两排支撑架均向-Z方向移动2.5
-const FRAME_BACK_Z=-17.0;
-const FRAME_FRONT_Z=10.5;
-const FRAME_CENTER_Z=(FRAME_BACK_Z+FRAME_FRONT_Z)/2;
-const FRAME_DEPTH=FRAME_FRONT_Z-FRAME_BACK_Z;
-
+// 厂房立柱和顶部横梁
 for(let x=-13;x<=13;x+=6.5){
- for(let z of [FRAME_BACK_Z,FRAME_FRONT_Z]){
+ for(let z of [-11,10]){
   box(scene,x,5,z,.25,10,.25,steel);
  }
- // 顶部纵向连接梁随立柱跨度同步调整
- box(scene,x,9.9,FRAME_CENTER_Z,.22,.22,FRAME_DEPTH,steel);
+ box(scene,x,9.9,0,.22,.22,22,steel);
 }
-// 前后顶部横梁
-for(let z of [FRAME_BACK_Z,FRAME_FRONT_Z]){
- box(scene,0,9.8,z,27,.25,.25,steel);
-}
+for(let z of [-11,10])box(scene,0,9.8,z,27,.25,.25,steel);
 
 // 设备状态灯
 const lamps=[];
@@ -714,14 +540,11 @@ function animate(){
   if(part.userData.state==='stored'){
    part.userData.storedT=(part.userData.storedT||0)+.016;
    if(part.userData.storedT>1.35){
-    part.userData.state='waitingSpawn';
-    part.visible=false;
-    tryRespawnPart(part);
+    part.position.set(10.0,1.02,BELT_Z);part.visible=true;
+    part.userData.classified=false;part.userData.state='moving';
+    part.userData.bad=Math.random()<.30;part.userData.missing=part.userData.bad&&Math.random()<.5;
+    part.userData.pickT=0;part.userData.storedT=0;
    }
-   return;
-  }
-  if(part.userData.state==='waitingSpawn'){
-   tryRespawnPart(part);
    return;
   }
   if(part.userData.state==='rejecting')return;
@@ -730,30 +553,12 @@ function animate(){
    return;
   }
   if(part.userData.state==='moving'||part.userData.state==='passed'){
-   // 防追尾：运动方向为-X，前方工件不足3.0间距时暂停当前工件
-   let blockedByPart=false;
-   for(const other of workpieces){
-    if(other===part || !other.visible)continue;
-    if(other.userData.state==='stored' || other.userData.state==='waitingSpawn')continue;
-    const gap=part.position.x-other.position.x;
-    if(gap>0 && gap<3.0 &&
-       Math.abs(part.position.z-other.position.z)<.45){
-     blockedByPart=true;
-     break;
-    }
-   }
-   if(!blockedByPart)part.position.x-=.012;
-
+   part.position.x-=.012;
    if(!part.userData.classified&&part.position.x<=-1.1){
     if(activePick&&part.userData.bad){part.position.x=-1.1;part.userData.state='queued';}
     else classifyPart(part);
    }
-   // 到达传送带左端后等待入口空位，再安全循环补料
-   if(part.position.x<BELT_LEFT+.25){
-    part.userData.state='waitingSpawn';
-    part.visible=false;
-    tryRespawnPart(part);
-   }
+   if(part.position.x<BELT_LEFT+.25){part.position.x=10.0;part.userData.classified=false;part.userData.state='moving';part.userData.bad=Math.random()<.30;part.userData.missing=part.userData.bad&&Math.random()<.5;part.userData.pickT=0;part.visible=true;}
   }
  });
  detectFrame.material.opacity=.55+.45*Math.sin(t*3);detectFrame.material.transparent=true;detectBeam.intensity=4+1.5*Math.sin(t*4);
