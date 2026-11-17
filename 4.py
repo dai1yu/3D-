@@ -143,7 +143,7 @@ background:rgba(3,35,44,.94);border:1px solid #16d9df;box-shadow:0 0 20px #087b8
   <div class="bar-row"><span>运行时间</span><div class="bar"><i style="width:86%"></i></div><b>86%</b></div>
   <div class="bar-row"><span>加工进度</span><div class="bar"><i style="width:72%"></i></div><b>72%</b></div>
   <div class="bar-row"><span>健康指数</span><div class="bar"><i style="width:96%"></i></div><b>96%</b></div>
-  <div class="section-label">机械臂 / 工人协同状态</div><div class="device"><span><i class="dot warn" id="robotDot"></i>机械臂 C03</span><b class="status warn" id="robotState">待机</b></div><div class="device"><span><i class="dot"></i>现场工人 W01</span><b class="status" id="workerState">工位监控</b></div><div class="section-label">视觉检测摄像头</div>
+  <div class="section-label">机械臂 / 工人协同状态</div><div class="device"><span><i class="dot warn" id="robotDot"></i>机械臂 C03</span><b class="status warn" id="robotState">待机</b></div><div class="device"><span><i class="dot"></i>现场工人 W01</span><b class="status" id="workerState">电脑操作</b></div><div class="section-label">视觉检测摄像头</div>
   <div class="device" id="cameraStatus"><span><i class="dot"></i>传送带工业相机 CAM-01</span><b class="status" id="camState">在线</b></div>
   <div class="metric-grid">
     <div class="metric"><label>检测状态</label><strong id="detectState" style="font-size:15px">待检测</strong></div>
@@ -217,11 +217,12 @@ window.addEventListener('reset-twin-camera',()=>{
  camera.position.copy(defaultCameraPosition);controls.target.set(6,1,0);controls.update();
 });
 
-scene.add(new THREE.HemisphereLight(0x9eefff,0x14252d,2.0));
-const key=new THREE.DirectionalLight(0xffffff,2.3);
+scene.add(new THREE.HemisphereLight(0xc8f5ff,0x26383d,2.8));
+const key=new THREE.DirectionalLight(0xffffff,3.0);
 key.position.set(10,22,12);key.castShadow=true;scene.add(key);
-const cyanLight=new THREE.PointLight(0x00d9e8,32,35);cyanLight.position.set(-8,7,0);scene.add(cyanLight);
-const blueLight=new THREE.PointLight(0x087bff,22,30);blueLight.position.set(8,5,-8);scene.add(blueLight);
+const ceilingFill=new THREE.DirectionalLight(0xe6f7ff,1.35);ceilingFill.position.set(-12,18,-10);scene.add(ceilingFill);
+const cyanLight=new THREE.PointLight(0x00d9e8,38,42);cyanLight.position.set(-8,7,0);scene.add(cyanLight);
+const blueLight=new THREE.PointLight(0x087bff,26,38);blueLight.position.set(8,5,-8);scene.add(blueLight);
 
 const mat=(color,metalness=.25,roughness=.55,emissive=0x000000)=>new THREE.MeshStandardMaterial({color,metalness,roughness,emissive});
 const floorMat=new THREE.MeshStandardMaterial({color:0x555b5c,metalness:.04,roughness:.96});
@@ -613,15 +614,96 @@ function makeRobot(x,z){
  return {root,shoulder,elbow,wrist,fingerL,fingerR};
 }
 const robot=makeRobot(-1.1,9.75);
-// 第二条并行产线：标准化机床、输送、检测和分拣模块
+// 第二条并行产线：保留原输送线和分拣布局，将原标准模块升级为一台真实结构特征明显的五轴立式加工中心
 const secondaryLine=new THREE.Group();secondaryLine.position.set(23,0,-1);scene.add(secondaryLine);
 const moduleBelt=mat(0x263438,.18,.88);box(secondaryLine,0,.42,0,23,.48,1.45,moduleBelt);box(secondaryLine,0,.70,0,22.7,.08,1.20,mat(0x42575a,.4,.72));
-for(let i=0;i<4;i++){const mx=-8+i*5.3;box(secondaryLine,mx,1.65,-3.1,3.4,3.1,2.7,machineWhite);box(secondaryLine,mx,1.65,-1.72,2.55,1.9,.06,glass);box(secondaryLine,mx,3.25,-3.1,3.5,.15,2.8,steel);}
+// 五轴机床主体：封闭式钣金机身、前置双开观察门、顶部横梁、侧置刀库
+function makeFiveAxisMachine(parent,x,z){
+ const g=new THREE.Group();g.position.set(x,0,z);parent.add(g);
+ const body=mat(0xb7c5c9,.62,.30),bodyDark=mat(0x34464d,.78,.28),edge=mat(0x8b9da2,.86,.22),inside=mat(0x172a31,.62,.35);
+ const windowMat=new THREE.MeshStandardMaterial({color:0x147c8a,metalness:.32,roughness:.12,transparent:true,opacity:.58});
+ const orange=mat(0xe4a52d,.48,.34),rubber=mat(0x151d21,.12,.82),display=mat(0x061b25,.25,.16,0x063a48);
+ // 重型底座、调平脚与排屑底盘
+ box(g,0,.34,0,5.25,.62,4.45,bodyDark);
+ box(g,0,.72,0,5.05,.20,4.25,edge);
+ box(g,0,.88,-.05,4.82,.18,4.02,body);
+ for(const xx of [-2.15,2.15])for(const zz of [-1.75,1.75]){box(g,xx,.13,zz,.48,.26,.48,rubber);const foot=new THREE.Mesh(new THREE.CylinderGeometry(.17,.20,.12,20),edge);foot.position.set(xx,.06,zz);g.add(foot);}
+ // 封闭加工舱：左右立柱、上横梁、后壁和深色内腔
+ box(g,-2.28,2.55,-.28,.48,3.25,3.72,body);
+ box(g,2.28,2.55,-.28,.48,3.25,3.72,body);
+ box(g,0,4.12,-.28,4.95,.48,3.72,body);
+ box(g,0,2.55,-2.08,4.18,3.05,.18,inside);
+ box(g,0,2.55,1.62,4.20,3.02,.16,bodyDark);
+ // 前部双门玻璃、门框、把手和下部防护裙板（五轴机床与三轴机床造型区别）
+ box(g,-1.05,2.55,1.76,1.98,2.35,.075,windowMat,false);
+ box(g,1.05,2.55,1.76,1.98,2.35,.075,windowMat,false);
+ for(const xx of [-2.10,0,2.10])box(g,xx,2.55,1.83,.12,2.58,.15,edge);
+ box(g,0,3.86,1.82,4.30,.13,.15,edge);box(g,0,1.25,1.82,4.30,.16,.15,edge);
+ for(const xx of [-.13,.13])box(g,xx,2.45,1.91,.055,.54,.10,orange);
+ box(g,0,1.02,0,4.72,.20,3.90,bodyDark);
+ // X/Y/Z 结构暗示：横向滑枕、Z轴主轴箱与高速主轴
+ box(g,0,3.55,-.35,3.55,.28,.62,edge);
+ box(g,.10,3.12,-.28,1.18,.88,1.05,body);
+ const spindle=new THREE.Mesh(new THREE.CylinderGeometry(.28,.34,.82,32),edge);spindle.position.set(.10,2.52,-.25);g.add(spindle);
+ const nose=new THREE.Mesh(new THREE.CylinderGeometry(.17,.22,.30,28),bodyDark);nose.position.set(.10,2.00,-.25);g.add(nose);
+ const tool=new THREE.Mesh(new THREE.CylinderGeometry(.055,.085,.38,18),orange);tool.position.set(.10,1.68,-.25);g.add(tool);
+ // 核心五轴机构：A轴摇篮两侧耳轴 + 倾斜转台 + C轴回转工作台
+ const trunnion=new THREE.Group();trunnion.position.set(0,1.62,-.12);g.add(trunnion);
+ const trunnionBase=box(trunnion,0,.10,0,2.55,.22,1.72,bodyDark);
+ for(const xx of [-1.35,1.35]){const bearing=new THREE.Mesh(new THREE.CylinderGeometry(.30,.30,.42,32),edge);bearing.rotation.z=Math.PI/2;bearing.position.set(xx,.48,0);trunnion.add(bearing);const cap=new THREE.Mesh(new THREE.CylinderGeometry(.18,.18,.46,28),orange);cap.rotation.z=Math.PI/2;cap.position.set(xx,.48,0);trunnion.add(cap);}
+ const aCradle=new THREE.Group();aCradle.position.set(0,.38,0);trunnion.add(aCradle);
+ box(aCradle,0,.12,0,2.05,.25,1.42,edge);
+ const cTable=new THREE.Mesh(new THREE.CylinderGeometry(.72,.78,.24,48),body);cTable.position.set(0,.38,0);aCradle.add(cTable);
+ const cTop=new THREE.Mesh(new THREE.CylinderGeometry(.62,.62,.08,48),edge);cTop.position.set(0,.54,0);aCradle.add(cTop);
+ const chuck=new THREE.Mesh(new THREE.CylinderGeometry(.34,.38,.18,36),bodyDark);chuck.position.set(0,.67,0);aCradle.add(chuck);
+ for(let i=0;i<6;i++){const ang=i*Math.PI/3;const jaw=box(aCradle,Math.cos(ang)*.39,.79,Math.sin(ang)*.39,.16,.12,.20,orange);jaw.rotation.y=-ang;}
+ // 刀库：侧挂圆盘刀库、刀套与多把刀具
+ const magazine=new THREE.Group();magazine.position.set(2.82,2.62,-.45);g.add(magazine);
+ const magDisk=new THREE.Mesh(new THREE.CylinderGeometry(.82,.82,.24,40),bodyDark);magDisk.rotation.z=Math.PI/2;magazine.add(magDisk);
+ const magHub=new THREE.Mesh(new THREE.CylinderGeometry(.28,.28,.30,32),orange);magHub.rotation.z=Math.PI/2;magazine.add(magHub);
+ for(let i=0;i<12;i++){const a=i*Math.PI/6;const pocket=new THREE.Mesh(new THREE.CylinderGeometry(.105,.105,.38,16),edge);pocket.rotation.z=Math.PI/2;pocket.position.set(0,Math.cos(a)*.66,Math.sin(a)*.66);magazine.add(pocket);}
+ box(g,2.70,2.62,.25,.42,1.65,1.45,body);
+ // 独立电控柜、操作面板、急停按钮、三色灯柱
+ box(g,3.02,1.95,1.02,.62,2.15,.62,bodyDark);
+ box(g,3.02,2.40,1.36,.52,.72,.06,display,false);
+ for(let i=0;i<3;i++){const b=new THREE.Mesh(new THREE.CircleGeometry(.065,18),new THREE.MeshBasicMaterial({color:[0x27e5a0,0xffc44d,0xff4b52][i]}));b.position.set(2.86+i*.15,1.82,1.38);g.add(b);}
+ const post=new THREE.Mesh(new THREE.CylinderGeometry(.07,.07,.62,16),edge);post.position.set(-1.95,4.55,-1.55);g.add(post);
+ for(let i=0;i<3;i++){const beacon=new THREE.Mesh(new THREE.CylinderGeometry(.11,.11,.18,20),new THREE.MeshBasicMaterial({color:[0x20df8a,0xffc13b,0xff4e55][i],emissive:[0x075c2d,0x624000,0x650b12][i]}));beacon.position.set(-1.95,4.22+i*.19,-1.55);g.add(beacon);}
+ // 设备铭牌和前下方排屑口
+ box(g,-1.45,1.03,1.91,.92,.24,.055,bodyDark,false);
+ box(g,-1.45,1.03,1.95,.72,.08,.02,orange,false);
+ box(g,0,.98,1.93,1.25,.18,.06,inside,false);
+ return {root:g,spindle,trunnion,aCradle,cTable};
+}
+const fiveAxisMachine=makeFiveAxisMachine(secondaryLine,-2.2,-3.1);
+// 输送线两侧的导向、检测立柱和分拣箱继续保留
 box(secondaryLine,8,1.35,-.4,.7,2.5,.7,yellow);box(secondaryLine,10,.65,2.3,2.0,1.3,1.7,mat(0x632a2d,.35,.6));for(let i=0;i<10;i++)box(secondaryLine,-10+i*2.15,.93,0,.10,.10,1.65,steel,false);
-const moduleSignCanvas=document.createElement('canvas');moduleSignCanvas.width=512;moduleSignCanvas.height=128;const moduleSignCtx=moduleSignCanvas.getContext('2d');moduleSignCtx.fillStyle='#09232b';moduleSignCtx.fillRect(0,0,512,128);moduleSignCtx.strokeStyle='#21d8df';moduleSignCtx.lineWidth=5;moduleSignCtx.strokeRect(4,4,504,120);moduleSignCtx.fillStyle='#c9ffff';moduleSignCtx.font='bold 38px Microsoft YaHei';moduleSignCtx.textAlign='center';moduleSignCtx.fillText('产线 02 · 标准模块',256,78);const moduleSign=new THREE.Mesh(new THREE.PlaneGeometry(4.5,1.1),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(moduleSignCanvas),transparent:true,side:THREE.DoubleSide}));moduleSign.position.set(0,4,-4.5);secondaryLine.add(moduleSign);
-// 轻量化工人：工装、安全帽；动作由分拣/巡检事件驱动
-function makeWorker(x,z){const g=new THREE.Group();g.position.set(x,0,z);scene.add(g);const suit=mat(0x285b72,.25,.72),helmet=mat(0xf0b72d,.18,.48),skin=mat(0xc68f70,.05,.8),boot=mat(0x202a2e,.2,.8);box(g,0,1.18,0,.52,.78,.30,suit);const head=new THREE.Mesh(new THREE.SphereGeometry(.19,16,12),skin);head.position.set(0,1.78,0);g.add(head);const hat=new THREE.Mesh(new THREE.SphereGeometry(.22,16,8,0,Math.PI*2,0,Math.PI/2),helmet);hat.position.set(0,1.94,0);g.add(hat);box(g,0,1.88,.04,.48,.045,.36,helmet);const armL=box(g,-.36,1.35,0,.14,.58,.14,suit),armR=box(g,.36,1.35,0,.14,.58,.14,suit),legL=box(g,-.14,.48,0,.17,.72,.18,suit),legR=box(g,.14,.48,0,.17,.72,.18,suit);box(g,-.14,.10,.06,.23,.18,.34,boot);box(g,.14,.10,.06,.23,.18,.34,boot);return {root:g,head,armL,armR,legL,legR};}
-const worker=makeWorker(3.0,10.0);let workerMode='station',workerTimer=0,patrolTarget=0,screenRefresh=-1;
+const moduleSignCanvas=document.createElement('canvas');moduleSignCanvas.width=512;moduleSignCanvas.height=128;const moduleSignCtx=moduleSignCanvas.getContext('2d');moduleSignCtx.fillStyle='#09232b';moduleSignCtx.fillRect(0,0,512,128);moduleSignCtx.strokeStyle='#21d8df';moduleSignCtx.lineWidth=5;moduleSignCtx.strokeRect(4,4,504,120);moduleSignCtx.fillStyle='#c9ffff';moduleSignCtx.font='bold 38px Microsoft YaHei';moduleSignCtx.textAlign='center';moduleSignCtx.fillText('产线 02 · 五轴联动加工中心',256,78);const moduleSign=new THREE.Mesh(new THREE.PlaneGeometry(5.5,1.1),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(moduleSignCanvas),transparent:true,side:THREE.DoubleSide}));moduleSign.position.set(-2.2,4.95,-5.35);secondaryLine.add(moduleSign);
+// 坐姿操作人员：固定坐在 A01 电脑工位前，面向显示器，双手放在键盘上
+function makeWorker(x,z){
+ const g=new THREE.Group();g.position.set(x,0,z);scene.add(g);
+ const suit=mat(0x285b72,.25,.72),helmet=mat(0xf0b72d,.18,.48),skin=mat(0xc68f70,.05,.8),boot=mat(0x202a2e,.2,.8),chair=mat(0x202e35,.55,.48);
+ // 坐姿躯干与头部
+ const torso=box(g,0,1.28,.02,.52,.72,.34,suit);torso.rotation.x=-.10;
+ const head=new THREE.Mesh(new THREE.SphereGeometry(.19,18,14),skin);head.position.set(0,1.86,-.08);g.add(head);
+ const hat=new THREE.Mesh(new THREE.SphereGeometry(.22,18,10,0,Math.PI*2,0,Math.PI/2),helmet);hat.position.set(0,2.02,-.08);g.add(hat);box(g,0,1.97,-.06,.48,.05,.36,helmet);
+ // 椅背、坐垫、升降杆和五星椅脚
+ box(g,0,1.30,.48,.66,.82,.16,chair);box(g,0,.78,.20,.72,.16,.72,chair);
+ const post=new THREE.Mesh(new THREE.CylinderGeometry(.055,.07,.52,16),steel);post.position.set(0,.48,.20);g.add(post);
+ for(let i=0;i<5;i++){const a=i*Math.PI*2/5;const leg=box(g,Math.cos(a)*.32,.16,.20+Math.sin(a)*.32,.58,.09,.10,chair);leg.rotation.y=-a;const wheel=new THREE.Mesh(new THREE.SphereGeometry(.085,12,10),rubber);wheel.position.set(Math.cos(a)*.58,.09,.20+Math.sin(a)*.58);g.add(wheel);}
+ // 上臂前伸、肘部弯曲，前臂落在桌面键盘区域
+ const armL=box(g,-.34,1.30,-.28,.15,.48,.16,suit);armL.rotation.x=-.72;armL.rotation.z=-.10;
+ const armR=box(g,.34,1.30,-.28,.15,.48,.16,suit);armR.rotation.x=-.72;armR.rotation.z=.10;
+ const foreL=box(g,-.31,1.04,-.58,.13,.40,.13,suit);foreL.rotation.x=-.18;
+ const foreR=box(g,.31,1.04,-.58,.13,.40,.13,suit);foreR.rotation.x=-.18;
+ const handL=box(g,-.31,.99,-.78,.14,.08,.16,skin),handR=box(g,.31,.99,-.78,.14,.08,.16,skin);
+ // 大腿水平向前、小腿自然下垂，双脚落地
+ const thighL=box(g,-.16,.66,-.20,.20,.18,.58,suit);const thighR=box(g,.16,.66,-.20,.20,.18,.58,suit);
+ const shinL=box(g,-.16,.35,-.48,.17,.48,.18,suit);const shinR=box(g,.16,.35,-.48,.17,.48,.18,suit);
+ box(g,-.16,.10,-.62,.24,.15,.34,boot);box(g,.16,.10,-.62,.24,.15,.34,boot);
+ return {root:g,head,armL,armR,foreL,foreR,handL,handR,legL:thighL,legR:thighR};
+}
+const worker=makeWorker(11.2,3.25);let workerMode='station',workerTimer=0,patrolTarget=0,screenRefresh=-1;
 const sparkCount=90,sparkPositions=new Float32Array(sparkCount*3),sparkGeo=new THREE.BufferGeometry();sparkGeo.setAttribute('position',new THREE.BufferAttribute(sparkPositions,3));const sparks=new THREE.Points(sparkGeo,new THREE.PointsMaterial({color:0xffb34d,size:.075,transparent:true,opacity:.9}));scene.add(sparks);
 function burstSparks(){for(let i=0;i<sparkCount;i++){sparkPositions[i*3]=7+(Math.random()-.5)*.8;sparkPositions[i*3+1]=1.5+Math.random()*.5;sparkPositions[i*3+2]=4+(Math.random()-.5)*.8;}sparkGeo.attributes.position.needsUpdate=true;}
 
@@ -697,13 +779,13 @@ for(let z of [FRAME_BACK_Z,FRAME_FRONT_Z]){
 const roofMat=new THREE.MeshStandardMaterial({color:0x39494e,metalness:.35,roughness:.7,transparent:true,opacity:.12,depthWrite:false}), pipeMat=mat(0xb34b3d,.55,.42), ductMat=mat(0x7e8d90,.72,.38);
 box(scene,0,10.35,-3,58,.22,36,roofMat,false);
 for(let z=-19;z<=13;z+=4) box(scene,0,10.18,z,58,.16,.16,steel,false);
-for(let x=-27;x<=27;x+=9){const duct=new THREE.Mesh(new THREE.CylinderGeometry(.28,.28,52,16),ductMat);duct.rotation.z=Math.PI/2;duct.position.set(x,9.55,-2);scene.add(duct);const firePipe=new THREE.Mesh(new THREE.CylinderGeometry(.075,.075,52,12),pipeMat);firePipe.rotation.z=Math.PI/2;firePipe.position.set(x,9.15,7);scene.add(firePipe);for(let z=-18;z<=12;z+=6){box(scene,x,9.82,z,1.65,.12,.48,mat(0xd8e4d8,.2,.25,0x566b55),false);const pl=new THREE.PointLight(0xffe8bd,5,10);pl.position.set(x,8.9,z);scene.add(pl);}}
-for(let x=-24;x<=24;x+=8){box(scene,x,8.95,-2,.10,.10,28,pipeMat,false);for(let z=-14;z<=10;z+=6){const nozzle=new THREE.Mesh(new THREE.CylinderGeometry(.045,.08,.22,10),pipeMat);nozzle.position.set(x,8.78,z);scene.add(nozzle);}}
+for(let x=-27;x<=27;x+=9){const duct=new THREE.Mesh(new THREE.CylinderGeometry(.28,.28,52,16),ductMat);duct.rotation.z=Math.PI/2;duct.position.set(x,9.55,-2);scene.add(duct);const firePipe=new THREE.Mesh(new THREE.CylinderGeometry(.075,.075,52,12),pipeMat);firePipe.rotation.z=Math.PI/2;firePipe.position.set(x,9.15,7);scene.add(firePipe);for(let z=-18;z<=12;z+=6){box(scene,x,9.82,z,1.65,.12,.48,mat(0xd8e4d8,.2,.25,0x566b55),false);const pl=new THREE.PointLight(0xfff1d4,9,17);pl.position.set(x,8.85,z);scene.add(pl);}}
+for(let x=-24;x<=24;x+=8){const ceilingPanel=box(scene,x,9.78,0,3.2,.10,1.15,mat(0xe8f5e8,.08,.25,0x526b50),false);const ceilingGlow=new THREE.PointLight(0xe7f4ff,5.5,15);ceilingGlow.position.set(x,9.15,0);scene.add(ceilingGlow);box(scene,x,8.95,-2,.10,.10,28,pipeMat,false);for(let z=-14;z<=10;z+=6){const nozzle=new THREE.Mesh(new THREE.CylinderGeometry(.045,.08,.22,10),pipeMat);nozzle.position.set(x,8.78,z);scene.add(nozzle);}}
 function warningSign(x,y,z,textLabel){const g=new THREE.Group();g.position.set(x,y,z);scene.add(g);box(g,0,0,0,1.25,.78,.09,yellow,false);box(g,0,0,.055,1.08,.60,.025,dark,false);const c=document.createElement('canvas');c.width=256;c.height=128;const ctx=c.getContext('2d');ctx.fillStyle='#f2b72c';ctx.font='bold 25px sans-serif';ctx.textAlign='center';ctx.fillText(textLabel,128,76);const face=new THREE.Mesh(new THREE.PlaneGeometry(1.02,.52),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(c),transparent:true}));face.position.z=.075;g.add(face);}
 warningSign(12,2.4,5.5,'注意夹伤');warningSign(-13,2.2,5.5,'安全通道');
 // 工位工作台、实时数据屏、工位椅、工具箱与线槽
 const workstationScreens=[];
-function makeWorkstation(x,z,label){const g=new THREE.Group();g.position.set(x,0,z);scene.add(g);box(g,0,.92,0,2.0,.12,1.05,mat(0x59666a,.65,.65));box(g,0,.48,-.36,1.45,.78,.12,steel);box(g,0,1.55,-.22,.92,.62,.10,dark);const sc=document.createElement('canvas');sc.width=512;sc.height=300;const sx=sc.getContext('2d');sx.fillStyle='#061923';sx.fillRect(0,0,512,300);sx.fillStyle='#35e4df';sx.font='bold 30px sans-serif';sx.fillText(label,22,42);sx.fillStyle='#9de8e5';sx.font='22px sans-serif';sx.fillText('CAM-01  ONLINE',22,95);sx.fillText('检测记录  /  分拣日志',22,142);sx.fillStyle='#16d9df';sx.fillRect(22,168,460,3);sx.fillStyle='#b7d9dc';sx.font='20px sans-serif';sx.fillText('等待实时数据...',22,214);const screenTexture=new THREE.CanvasTexture(sc);const screenMaterial=new THREE.MeshBasicMaterial({map:screenTexture});const screen=box(g,0,1.56,-.145,.82,.48,.018,screenMaterial,false);workstationScreens.push({screen,label,canvas:sc,ctx:sx,texture:screenTexture});box(g,0,.55,1.05,.62,.12,.62,dark);box(g,0,1.0,1.32,.62,.82,.12,mat(0x263b42,.45,.7));box(g,-.78,.36,-.1,.72,.48,.55,mat(0x29363b,.7,.55));for(let i=0;i<3;i++)box(g,-.78,.65+i*.08,-.1,.48,.025,.42,steel,false);return g;}
+function makeWorkstation(x,z,label){const g=new THREE.Group();g.position.set(x,0,z);scene.add(g);box(g,0,.92,0,2.0,.12,1.05,mat(0x59666a,.65,.65));box(g,0,.48,-.36,1.45,.78,.12,steel);box(g,0,1.005,-.52,.72,.045,.28,mat(0x18272d,.45,.55));box(g,.52,1.005,-.48,.16,.035,.22,mat(0x202b30,.35,.62));box(g,0,1.55,-.22,.92,.62,.10,dark);const sc=document.createElement('canvas');sc.width=512;sc.height=300;const sx=sc.getContext('2d');sx.fillStyle='#061923';sx.fillRect(0,0,512,300);sx.fillStyle='#35e4df';sx.font='bold 30px sans-serif';sx.fillText(label,22,42);sx.fillStyle='#9de8e5';sx.font='22px sans-serif';sx.fillText('CAM-01  ONLINE',22,95);sx.fillText('检测记录  /  分拣日志',22,142);sx.fillStyle='#16d9df';sx.fillRect(22,168,460,3);sx.fillStyle='#b7d9dc';sx.font='20px sans-serif';sx.fillText('等待实时数据...',22,214);const screenTexture=new THREE.CanvasTexture(sc);const screenMaterial=new THREE.MeshBasicMaterial({map:screenTexture});const screen=box(g,0,1.56,-.145,.82,.48,.018,screenMaterial,false);workstationScreens.push({screen,label,canvas:sc,ctx:sx,texture:screenTexture});box(g,0,.55,1.05,.62,.12,.62,dark);box(g,0,1.0,1.32,.62,.82,.12,mat(0x263b42,.45,.7));box(g,-.78,.36,-.1,.72,.48,.55,mat(0x29363b,.7,.55));for(let i=0;i<3;i++)box(g,-.78,.65+i*.08,-.1,.48,.025,.42,steel,false);return g;}
 makeWorkstation(11.2,2.0,'A01 操作台');makeWorkstation(-11.2,1.9,'视觉检测操作台');box(scene,0,.35,-8.1,29,.22,.38,ductMat);for(let x=-14;x<=14;x+=2)box(scene,x,.48,-8.1,.045,.08,.42,steel,false);
 // 设备状态灯
 const lamps=[];
@@ -747,9 +829,17 @@ function animate(){
  // 主轴旋转、舱门开合及告警灯与实时转速/温度联动
  const tele=window.twinTelemetry||{rpm:3200,temp:36.5};
  machineDynamics.forEach(d=>{d.spindle.rotation.y+=Math.max(.008,(tele.rpm||3200)/3200*.045);const hot=(tele.temp||36.5)>36.9;d.beacon.material.color.setHex(hot?0xff5a35:0x27e5a0);d.beacon.material.emissive.setHex(hot?0x8a1808:0x087c45);d.doorGlass.position.x=Math.sin(t*.7+d.phase)>.92?-.72:0;});
- // 缺陷件被抓取时工人转头观察废品区并清点；空闲时才沿安全通道短距离巡检
- if(workerMode==='inspectReject'){worker.head.rotation.y=.95;worker.armR.rotation.z=-.75+Math.sin(t*5)*.10;worker.armL.rotation.z=.35;workerTimer+=.016;if(workerTimer>2.8){workerMode='station';workerTimer=0;worker.head.rotation.y=0;worker.armR.rotation.z=0;worker.armL.rotation.z=0;const ws=document.getElementById('workerState');if(ws)ws.textContent='工位监控';}}
- else{workerTimer+=.016;if(workerTimer>18){workerMode='patrol';workerTimer=0;patrolTarget=patrolTarget===0?1:0;}if(workerMode==='patrol'){const tx=patrolTarget?4.8:3.0,tz=patrolTarget?7.0:10.0;worker.root.position.x+=(tx-worker.root.position.x)*.012;worker.root.position.z+=(tz-worker.root.position.z)*.012;worker.legL.rotation.x=Math.sin(t*5)*.24;worker.legR.rotation.x=-Math.sin(t*5)*.24;if(Math.abs(worker.root.position.x-tx)<.12&&Math.abs(worker.root.position.z-tz)<.12){workerMode='station';worker.legL.rotation.x=0;worker.legR.rotation.x=0;}}}
+ // 工人始终坐在电脑前操作：空闲时轻微敲击键盘，发现缺陷时转头查看分拣区
+ if(workerMode==='inspectReject'){
+  worker.head.rotation.y=.42;worker.armR.rotation.x=-.62+Math.sin(t*5)*.035;worker.armL.rotation.x=-.62;
+  worker.foreR.rotation.x=-.18+Math.sin(t*6)*.06;worker.foreL.rotation.x=-.18;
+  workerTimer+=.016;
+  if(workerTimer>2.8){workerMode='station';workerTimer=0;worker.head.rotation.y=0;const ws=document.getElementById('workerState');if(ws)ws.textContent='电脑操作';}
+ }else{
+  worker.head.rotation.y=Math.sin(t*.65)*.035;
+  worker.foreL.rotation.x=-.18+Math.sin(t*7)*.035;worker.foreR.rotation.x=-.18+Math.sin(t*7+1.2)*.035;
+  worker.handL.position.y=.99+Math.sin(t*7)*.018;worker.handR.position.y=.99+Math.sin(t*7+1.2)*.018;
+ }
  if(Math.floor(t*2)%7===0&&Math.random()<.035)burstSparks();
  // 远距离自动降低第二模块细节负载（LOD）
  secondaryLine.visible=camera.position.distanceTo(secondaryLine.position)<58;
