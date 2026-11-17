@@ -305,19 +305,28 @@ const machines=[
  makeMachine(8,-10.5,'精密铣削中心 H08')
 ];
 
-// 一体化传送带：反向输送，从右侧上料，工件向左经过检测工位
+// 加长并前移的传送带：机床模型、位置、尺寸和朝向保持不变
+// 原长度12.2，现长度24.4；整体向厂房前侧(+Z方向)移动2.2
+const BELT_X=-1.1;
+const BELT_Z=7.55;
+const BELT_LENGTH=24.4;
+const BELT_LEFT=BELT_X-BELT_LENGTH/2;
+const BELT_RIGHT=BELT_X+BELT_LENGTH/2;
 const beltMat=mat(0x253f49,.65,.4);
-box(scene,-1.1,.43,5.35,12.2,.52,1.65,beltMat);
-box(scene,-1.1,.72,5.35,11.9,.08,1.35,mat(0x0a5963,.5,.3));
+box(scene,BELT_X,.43,BELT_Z,BELT_LENGTH,.52,1.65,beltMat);
+box(scene,BELT_X,.72,BELT_Z,BELT_LENGTH-.3,.08,1.35,mat(0x0a5963,.5,.3));
 const beltRollers=[];
-for(let i=0;i<13;i++){
+for(let i=0;i<25;i++){
  const roller=new THREE.Mesh(new THREE.CylinderGeometry(.12,.12,1.42,16),steel);
- roller.rotation.z=Math.PI/2;roller.position.set(-6.9+i*.97,.42,5.35);scene.add(roller);beltRollers.push(roller);
+ roller.rotation.z=Math.PI/2;
+ roller.position.set(BELT_LEFT+.30+i*.99,.42,BELT_Z);
+ scene.add(roller);
+ beltRollers.push(roller);
 }
-// 侧边导轨和机床入口对接导向段
-box(scene,-1.1,.92,4.55,12.0,.12,.10,steel);
-box(scene,-1.1,.92,6.15,12.0,.12,.10,steel);
-box(scene,5.25,.78,5.35,.45,.18,1.55,yellow);
+// 两侧导轨和入口导向段与传送带同步加长、前移
+box(scene,BELT_X,.92,BELT_Z-.80,BELT_LENGTH-.2,.12,.10,steel);
+box(scene,BELT_X,.92,BELT_Z+.80,BELT_LENGTH-.2,.12,.10,steel);
+box(scene,BELT_RIGHT-.25,.78,BELT_Z,.45,.18,1.55,yellow);
 
 // 透明树脂/亚克力精密异形工件：参考用户图片的中央圆形凸台、双侧圆柱、
  // 三角形安装翼、立式加强片与圆孔结构
@@ -373,31 +382,32 @@ function makeReferencePart(){
  }
  return part;
 }
-for(let i=0;i<4;i++){
+// 8件缩小后的工件，沿传送带上料端均匀排列
+for(let i=0;i<8;i++){
  const group=makeReferencePart();
- group.position.set(5.1-i*2.75,1.00,5.35);
- group.scale.set(.72,.72,.72);
+ group.position.set(10.0-i*1.55,1.00,BELT_Z);
+ group.scale.set(.58,.58,.58);
  scene.add(group);
- group.userData={index:i,offset:i*2.75,state:'moving',bad:i===2||i===3,missing:i===2,classified:false};
+ group.userData={index:i,offset:i*1.55,state:'moving',bad:i===5||i===6,missing:i===5,classified:false};
  workpieces.push(group);
 }
 // 工业相机改为传送带侧装：位于传送带前侧，镜头水平朝向检测区域
 // 这样不会挡住工件和机械臂，也能清楚看到相机与检测区域的对应关系
-const cameraRig=new THREE.Group();cameraRig.position.set(-1.2,2.65,3.55);scene.add(cameraRig);
+const cameraRig=new THREE.Group();cameraRig.position.set(-1.2,2.65,5.75);scene.add(cameraRig);
 box(cameraRig,0,0,0,.82,.48,.62,dark);
 const camLens=new THREE.Mesh(new THREE.CylinderGeometry(.17,.17,.34,24),mat(0x07131b,.7,.18));
 camLens.rotation.x=Math.PI/2;camLens.position.set(0,0,.43);cameraRig.add(camLens);
 const lensGlass=new THREE.Mesh(new THREE.CircleGeometry(.12,24),mat(0x12d8e8,.3,.15,0x087c9a));
 lensGlass.position.set(0,0,.61);cameraRig.add(lensGlass);
 // 侧装立柱与横向支架
-box(scene,-1.2,1.25,3.55,.16,2.5,.16,steel);
-box(scene,-1.2,2.25,3.95,.16,.14,.92,steel);
-box(scene,-1.2,1.95,3.55,.72,.14,.72,dark);
+box(scene,-1.2,1.25,5.75,.16,2.5,.16,steel);
+box(scene,-1.2,2.25,6.15,.16,.14,.92,steel);
+box(scene,-1.2,1.95,5.75,.72,.14,.72,dark);
 const detectFrame=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(3.2,.05,1.55)),new THREE.LineBasicMaterial({color:0x14e8ee}));
-detectFrame.position.set(-1.2,1.20,5.35);scene.add(detectFrame);
-const detectBeam=new THREE.SpotLight(0x00d9e8,5,5,Math.PI/5,.45,1.2);detectBeam.position.set(-1.2,2.55,4.12);detectBeam.target.position.set(-1.2,1.05,5.35);scene.add(detectBeam);scene.add(detectBeam.target);
+detectFrame.position.set(-1.2,1.20,BELT_Z);scene.add(detectFrame);
+const detectBeam=new THREE.SpotLight(0x00d9e8,5,5,Math.PI/5,.45,1.2);detectBeam.position.set(-1.2,2.55,6.32);detectBeam.target.position.set(-1.2,1.05,BELT_Z);scene.add(detectBeam);scene.add(detectBeam.target);
 // 旁侧废品收集区，放在机械臂后侧并留出抓取空间
-const rejectBin=new THREE.Group();rejectBin.position.set(-1.1,0,9.55);scene.add(rejectBin);
+const rejectBin=new THREE.Group();rejectBin.position.set(-1.1,0,11.75);scene.add(rejectBin);
 box(rejectBin,0,.48,0,2.2,.95,1.75,mat(0x57232a,.35,.5));
 box(rejectBin,0,1.02,0,2.05,.12,1.62,mat(0xb72e36,.25,.35));
 box(rejectBin,0,1.42,-.90,1.35,.72,.10,mat(0x241c25,.3,.5));
@@ -452,7 +462,7 @@ function makeRobot(x,z){
  cyl(elbow,.225,.225,.07,jointMat,.20);
  return {root,shoulder,elbow,wrist,fingerL,fingerR};
 }
-const robot=makeRobot(-1.1,7.55);
+const robot=makeRobot(-1.1,9.75);
 let totalDetected=0,goodDetected=0,badDetected=0,missingDetected=0,rejectStored=0,activePick=null;
 function updateProductionBoard(){
  const el=id=>document.getElementById(id);
@@ -468,9 +478,9 @@ function classifyPart(part){
  if(part.userData.bad){
   badDetected++;if(part.userData.missing)missingDetected++;
   // 工件停在机械臂正前方的固定抓取点，避免机械臂追逐移动工件
-  part.position.set(-1.1,1.12,5.35);
+  part.position.set(-1.1,1.12,BELT_Z);
   part.userData.state='rejecting';part.userData.pickT=0;
-  part.userData.pickStart=new THREE.Vector3(-1.1,1.12,5.35);
+  part.userData.pickStart=new THREE.Vector3(-1.1,1.12,BELT_Z);
   activePick=part;
   logSort('<span style="color:#ff6b70">缺陷报警：工件 #'+(part.userData.index+1)+'，机械臂准备抓取</span>');
  }
@@ -499,10 +509,10 @@ function animate(){
  if(activePick){
   const p=activePick;p.userData.pickT+=.012;const q=Math.min(p.userData.pickT,1);
   const p0=p.userData.pickStart;
-  const grip=new THREE.Vector3(-1.1,1.34,5.35);       // 夹爪抬离传送带
-  const lifted=new THREE.Vector3(-1.1,2.0,5.75);
-  const carry=new THREE.Vector3(-1.1,1.95,8.55);     // 抬高后绕过传送带侧边
-  const drop=new THREE.Vector3(-1.1,1.32,9.45);      // 废品箱投放口
+  const grip=new THREE.Vector3(-1.1,1.34,BELT_Z);       // 夹爪抬离传送带
+  const lifted=new THREE.Vector3(-1.1,2.0,7.95);
+  const carry=new THREE.Vector3(-1.1,1.95,10.75);     // 抬高后绕过传送带侧边
+  const drop=new THREE.Vector3(-1.1,1.32,11.65);      // 废品箱投放口
   if(q<.22){
    const k=q/.22;robot.shoulder.rotation.x=-1.05*k;robot.elbow.rotation.x=.62*k;
    robot.fingerL.position.x=-.19+.10*k;robot.fingerR.position.x=.19-.10*k;
@@ -518,7 +528,7 @@ function animate(){
    p.position.lerpVectors(carry,drop,k);
   }else{
    const k=(q-.90)/.10;robot.shoulder.rotation.x=.82*(1-k);robot.elbow.rotation.x=-.28*(1-k);
-   p.position.lerpVectors(drop,new THREE.Vector3(-1.1,1.05,9.55),k);
+   p.position.lerpVectors(drop,new THREE.Vector3(-1.1,1.05,11.75),k);
    robot.fingerL.position.x=-.09-.10*k;robot.fingerR.position.x=.09+.10*k;
   }
   robot.wrist.rotation.x=-.10;
@@ -530,7 +540,7 @@ function animate(){
   if(part.userData.state==='stored'){
    part.userData.storedT=(part.userData.storedT||0)+.016;
    if(part.userData.storedT>1.35){
-    part.position.set(5.1,1.02,5.35);part.visible=true;
+    part.position.set(10.0,1.02,BELT_Z);part.visible=true;
     part.userData.classified=false;part.userData.state='moving';
     part.userData.bad=Math.random()<.30;part.userData.missing=part.userData.bad&&Math.random()<.5;
     part.userData.pickT=0;part.userData.storedT=0;
@@ -544,11 +554,11 @@ function animate(){
   }
   if(part.userData.state==='moving'||part.userData.state==='passed'){
    part.position.x-=.012;
-   if(!part.userData.classified&&part.position.x>=-1.1){
+   if(!part.userData.classified&&part.position.x<=-1.1){
     if(activePick&&part.userData.bad){part.position.x=-1.1;part.userData.state='queued';}
     else classifyPart(part);
    }
-   if(part.position.x<-6.2){part.position.x=5.1;part.userData.classified=false;part.userData.state='moving';part.userData.bad=Math.random()<.30;part.userData.missing=part.userData.bad&&Math.random()<.5;part.userData.pickT=0;part.visible=true;}
+   if(part.position.x<BELT_LEFT+.25){part.position.x=10.0;part.userData.classified=false;part.userData.state='moving';part.userData.bad=Math.random()<.30;part.userData.missing=part.userData.bad&&Math.random()<.5;part.userData.pickT=0;part.visible=true;}
   }
  });
  detectFrame.material.opacity=.55+.45*Math.sin(t*3);detectFrame.material.transparent=true;detectBeam.intensity=4+1.5*Math.sin(t*4);
