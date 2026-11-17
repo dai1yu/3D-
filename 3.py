@@ -328,8 +328,75 @@ box(scene,BELT_X,.92,BELT_Z-.80,BELT_LENGTH-.2,.12,.10,steel);
 box(scene,BELT_X,.92,BELT_Z+.80,BELT_LENGTH-.2,.12,.10,steel);
 box(scene,BELT_RIGHT-.25,.78,BELT_Z,.45,.18,1.55,yellow);
 
+// =====================================================
+// 传送带最左端收纳盒：开放式工业金属周转料箱
+// +X侧朝向传送带，方便工件从导料板滑入
+// =====================================================
+const storageBox = new THREE.Group();
+storageBox.position.set(BELT_LEFT - 2.05, 0, BELT_Z);
+scene.add(storageBox);
+
+const binOuterMat = new THREE.MeshStandardMaterial({
+ color:0x344b55, metalness:.84, roughness:.32
+});
+const binInnerMat = new THREE.MeshStandardMaterial({
+ color:0x111e24, metalness:.55, roughness:.48
+});
+const binRimMat = new THREE.MeshStandardMaterial({
+ color:0x9aa9ad, metalness:.94, roughness:.22
+});
+const binAccentMat = new THREE.MeshStandardMaterial({
+ color:0x13a8b7, metalness:.72, roughness:.28,
+ emissive:0x06343a
+});
+
+// 箱底与防滑内衬
+box(storageBox,0,.28,0,3.25,.34,2.35,binOuterMat);
+box(storageBox,0,.465,0,2.94,.035,2.04,binInnerMat);
+
+// 后挡板及两侧挡板，朝向传送带的一端保持敞开
+box(storageBox,-1.53,.91,0,.19,1.12,2.35,binOuterMat);
+box(storageBox,0,.88,-1.08,3.12,1.02,.19,binOuterMat);
+box(storageBox,0,.88,1.08,3.12,1.02,.19,binOuterMat);
+
+// 箱口金属包边
+box(storageBox,-1.53,1.49,0,.25,.085,2.34,binRimMat);
+box(storageBox,0,1.49,-1.08,3.18,.085,.25,binRimMat);
+box(storageBox,0,1.49,1.08,3.18,.085,.25,binRimMat);
+
+// 外侧加强筋
+for(const x of [-1.05,-.35,.35,1.05]){
+ box(storageBox,x,.82,-1.19,.10,.72,.075,binRimMat);
+ box(storageBox,x,.82,1.19,.10,.72,.075,binRimMat);
+}
+
+// 底部支撑脚
+for(const x of [-1.20,1.20]){
+ for(const z of [-.82,.82]){
+  box(storageBox,x,.09,z,.32,.18,.32,binOuterMat);
+ }
+}
+
+// 正面铭牌及状态色条
+box(storageBox,-.20,.78,1.185,1.08,.28,.035,binInnerMat);
+box(storageBox,-.20,.91,1.207,.78,.035,.018,binAccentMat);
+
+// 传送带与收纳盒之间的金属导料滑槽
+const feedChute = new THREE.Mesh(
+ new THREE.BoxGeometry(1.35,.12,1.48),
+ new THREE.MeshStandardMaterial({
+  color:0x71858b, metalness:.90, roughness:.26
+ })
+);
+feedChute.position.set(BELT_LEFT-.55,.60,BELT_Z);
+feedChute.rotation.z=-.08;
+feedChute.castShadow=true;
+feedChute.receiveShadow=true;
+scene.add(feedChute);
+
+
 // 透明树脂/亚克力精密异形工件：参考用户图片的中央圆形凸台、双侧圆柱、
- // 三角形安装翼、立式加强片与圆孔结构
+// 三角形安装翼、立式加强片与圆孔结构
 const workpieces=[];
 const acrylic=new THREE.MeshPhysicalMaterial({
  color:0xdce8e7,metalness:.18,roughness:.19,transmission:.42,
@@ -405,10 +472,10 @@ function makeReferencePart(){
  // 中央圆形加工台阶与深色沉孔
  add(new THREE.CylinderGeometry(.66,.70,.12,64),edgeMat,0,.19,0);
  add(new THREE.CylinderGeometry(.59,.62,.075,64),topMat,0,.275,0);
- add(new THREE.TorusGeometry(.53,.035,12,64),brightMat,0,.322,0);
+
  add(new THREE.CylinderGeometry(.445,.46,.035,64),grooveMat,0,.315,0);
  add(new THREE.CylinderGeometry(.385,.40,.045,64),bodyMat,0,.342,0);
- add(new THREE.TorusGeometry(.34,.025,12,64),brightMat,0,.37,0);
+
 
  // 中心六角凹槽及内孔
  add(new THREE.CylinderGeometry(.255,.255,.025,6),edgeMat,0,.375,0);
@@ -458,11 +525,11 @@ function makeReferencePart(){
 // 8件缩小后的工件，沿传送带上料端均匀排列
 for(let i=0;i<8;i++){
  const group=makeReferencePart();
- // 工件间距由1.55扩大到2.5，避免在传送带上拥挤
- group.position.set(10.0-i*2.5,1.00,BELT_Z);
+ // 工件中心间距扩大到3.0，减少金属件边缘接触和穿模
+ group.position.set(10.0-i*3.0,1.00,BELT_Z);
  group.scale.set(.58,.58,.58);
  scene.add(group);
- group.userData={index:i,offset:i*2.5,state:'moving',bad:i===5||i===6,missing:i===5,classified:false};
+ group.userData={index:i,offset:i*3.0,state:'moving',bad:i===5||i===6,missing:i===5,classified:false};
  workpieces.push(group);
 }
 // 工业相机改为传送带侧装：位于传送带前侧，镜头水平朝向检测区域
@@ -545,6 +612,29 @@ function updateProductionBoard(){
  el('rejectBinCount').textContent=rejectStored;el('yieldRate').textContent=((1264+goodDetected)/(1286+totalDetected)*100).toFixed(1);
 }
 function logSort(message){const el=document.getElementById('sortLog');if(el)el.innerHTML=message+'<br>'+el.innerHTML.split('<br>').slice(0,2).join('<br>');}
+
+// 工件补料安全检查：入口有足够空位才重新出现，避免重生时与其他工件重叠
+function tryRespawnPart(part){
+ const spawnX=10.0;
+ for(const other of workpieces){
+  if(other===part || !other.visible)continue;
+  if(other.userData.state==='stored' || other.userData.state==='waitingSpawn')continue;
+  if(Math.abs(other.position.x-spawnX)<3.0 &&
+     Math.abs(other.position.z-BELT_Z)<.45){
+   return false;
+  }
+ }
+ part.position.set(spawnX,1.02,BELT_Z);
+ part.visible=true;
+ part.userData.classified=false;
+ part.userData.state='moving';
+ part.userData.bad=Math.random()<.30;
+ part.userData.missing=part.userData.bad&&Math.random()<.5;
+ part.userData.pickT=0;
+ part.userData.storedT=0;
+ return true;
+}
+
 function classifyPart(part){
  if(part.userData.classified)return;
  part.userData.classified=true;totalDetected++;document.getElementById('detectCount').textContent=totalDetected;
@@ -561,10 +651,10 @@ function classifyPart(part){
  else{goodDetected++;part.userData.state='passed';logSort('<span style="color:#42e6bd">工件 #'+(part.userData.index+1)+' 检测合格，继续输送</span>');}
  updateProductionBoard();
 }
-// 厂房支撑架：将前后两排立柱向外移，避开机床外壳，机床本身不移动
-// 后排从 z=-11 移至 z=-14.5；前排从 z=10 移至 z=13
-const FRAME_BACK_Z=-14.5;
-const FRAME_FRONT_Z=13;
+// 厂房支撑架整体向后移动，六台机床本身的位置、尺寸和朝向不变
+// 相比原位置，前后两排支撑架均向-Z方向移动2.5
+const FRAME_BACK_Z=-17.0;
+const FRAME_FRONT_Z=10.5;
 const FRAME_CENTER_Z=(FRAME_BACK_Z+FRAME_FRONT_Z)/2;
 const FRAME_DEPTH=FRAME_FRONT_Z-FRAME_BACK_Z;
 
@@ -624,11 +714,14 @@ function animate(){
   if(part.userData.state==='stored'){
    part.userData.storedT=(part.userData.storedT||0)+.016;
    if(part.userData.storedT>1.35){
-    part.position.set(10.0,1.02,BELT_Z);part.visible=true;
-    part.userData.classified=false;part.userData.state='moving';
-    part.userData.bad=Math.random()<.30;part.userData.missing=part.userData.bad&&Math.random()<.5;
-    part.userData.pickT=0;part.userData.storedT=0;
+    part.userData.state='waitingSpawn';
+    part.visible=false;
+    tryRespawnPart(part);
    }
+   return;
+  }
+  if(part.userData.state==='waitingSpawn'){
+   tryRespawnPart(part);
    return;
   }
   if(part.userData.state==='rejecting')return;
@@ -637,12 +730,30 @@ function animate(){
    return;
   }
   if(part.userData.state==='moving'||part.userData.state==='passed'){
-   part.position.x-=.012;
+   // 防追尾：运动方向为-X，前方工件不足3.0间距时暂停当前工件
+   let blockedByPart=false;
+   for(const other of workpieces){
+    if(other===part || !other.visible)continue;
+    if(other.userData.state==='stored' || other.userData.state==='waitingSpawn')continue;
+    const gap=part.position.x-other.position.x;
+    if(gap>0 && gap<3.0 &&
+       Math.abs(part.position.z-other.position.z)<.45){
+     blockedByPart=true;
+     break;
+    }
+   }
+   if(!blockedByPart)part.position.x-=.012;
+
    if(!part.userData.classified&&part.position.x<=-1.1){
     if(activePick&&part.userData.bad){part.position.x=-1.1;part.userData.state='queued';}
     else classifyPart(part);
    }
-   if(part.position.x<BELT_LEFT+.25){part.position.x=10.0;part.userData.classified=false;part.userData.state='moving';part.userData.bad=Math.random()<.30;part.userData.missing=part.userData.bad&&Math.random()<.5;part.userData.pickT=0;part.visible=true;}
+   // 到达传送带左端后等待入口空位，再安全循环补料
+   if(part.position.x<BELT_LEFT+.25){
+    part.userData.state='waitingSpawn';
+    part.visible=false;
+    tryRespawnPart(part);
+   }
   }
  });
  detectFrame.material.opacity=.55+.45*Math.sin(t*3);detectFrame.material.transparent=true;detectBeam.intensity=4+1.5*Math.sin(t*4);
