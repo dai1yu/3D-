@@ -302,7 +302,7 @@ function makeMachine(x,z,label){
   box(g,-.95,.84,1.34,.68,.30,.045,steel,false);
   box(g,-.95,.84,1.37,.54,.12,.018,glow,false);
   for(let i=0;i<5;i++)box(g,-1.55+i*.16,.83,-1.30,.09,.22,.025,steel,false);
-  g.userData.label=label;machineDynamics.push({spindle,doorGlass,beacon,phase:Math.random()*6.28});return g;
+  g.userData.label=label;machineDynamics.push({spindle,beacon});return g;
 }
 // 主生产线：传送带直接对接机床进料侧，机械臂位于交接工位
 const machines=[
@@ -699,11 +699,35 @@ box(scene,0,10.35,-3,58,.22,36,roofMat,false);
 for(let z=-19;z<=13;z+=4) box(scene,0,10.18,z,58,.16,.16,steel,false);
 for(let x=-27;x<=27;x+=9){const duct=new THREE.Mesh(new THREE.CylinderGeometry(.28,.28,52,16),ductMat);duct.rotation.z=Math.PI/2;duct.position.set(x,9.55,-2);scene.add(duct);const firePipe=new THREE.Mesh(new THREE.CylinderGeometry(.075,.075,52,12),pipeMat);firePipe.rotation.z=Math.PI/2;firePipe.position.set(x,9.15,7);scene.add(firePipe);for(let z=-18;z<=12;z+=6){box(scene,x,9.82,z,1.65,.12,.48,mat(0xd8e4d8,.2,.25,0x566b55),false);const pl=new THREE.PointLight(0xffe8bd,5,10);pl.position.set(x,8.9,z);scene.add(pl);}}
 for(let x=-24;x<=24;x+=8){box(scene,x,8.95,-2,.10,.10,28,pipeMat,false);for(let z=-14;z<=10;z+=6){const nozzle=new THREE.Mesh(new THREE.CylinderGeometry(.045,.08,.22,10),pipeMat);nozzle.position.set(x,8.78,z);scene.add(nozzle);}}
-function warningSign(x,y,z,textLabel){const g=new THREE.Group();g.position.set(x,y,z);scene.add(g);box(g,0,0,0,1.25,.78,.09,yellow,false);box(g,0,0,.055,1.08,.60,.025,dark,false);const c=document.createElement('canvas');c.width=256;c.height=128;const ctx=c.getContext('2d');ctx.fillStyle='#f2b72c';ctx.font='bold 25px sans-serif';ctx.textAlign='center';ctx.fillText(textLabel,128,76);const face=new THREE.Mesh(new THREE.PlaneGeometry(1.02,.52),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(c),transparent:true}));face.position.z=.075;g.add(face);}
+function warningSign(x,y,z,textLabel){
+ const g=new THREE.Group();
+ // 标识牌下移至正常视线高度，并增加落地立柱和底座，避免牌子悬空
+ g.position.set(x,1.78,z);scene.add(g);
+ box(g,0,0,0,1.25,.78,.09,yellow,false);
+ box(g,0,0,.055,1.08,.60,.025,dark,false);
+ const c=document.createElement('canvas');c.width=256;c.height=128;
+ const ctx=c.getContext('2d');ctx.fillStyle='#f2b72c';
+ ctx.font='bold 25px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+ ctx.fillText(textLabel,128,64);
+ const face=new THREE.Mesh(new THREE.PlaneGeometry(1.02,.52),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(c),transparent:true}));
+ face.position.z=.075;g.add(face);
+ // 立柱从牌子背后延伸至地面，底部用加宽底板固定
+ box(g,0,-.88,-.035,.13,1.76,.13,steel);
+ box(g,0,-1.72,-.035,.52,.12,.42,dark);
+ box(g,0,-1.64,-.035,.38,.08,.30,steel);
+}
 warningSign(12,2.4,5.5,'注意夹伤');warningSign(-13,2.2,5.5,'安全通道');
 // 工位工作台、实时数据屏、工位椅、工具箱与线槽
 const workstationScreens=[];
-function makeWorkstation(x,z,label){const g=new THREE.Group();g.position.set(x,0,z);scene.add(g);box(g,0,.92,0,2.0,.12,1.05,mat(0x59666a,.65,.65));box(g,0,.48,-.36,1.45,.78,.12,steel);box(g,0,1.55,-.22,.92,.62,.10,dark);const sc=document.createElement('canvas');sc.width=512;sc.height=300;const sx=sc.getContext('2d');sx.fillStyle='#061923';sx.fillRect(0,0,512,300);sx.fillStyle='#35e4df';sx.font='bold 30px sans-serif';sx.fillText(label,22,42);sx.fillStyle='#9de8e5';sx.font='22px sans-serif';sx.fillText('CAM-01  ONLINE',22,95);sx.fillText('检测记录  /  分拣日志',22,142);sx.fillStyle='#16d9df';sx.fillRect(22,168,460,3);sx.fillStyle='#b7d9dc';sx.font='20px sans-serif';sx.fillText('等待实时数据...',22,214);const screenTexture=new THREE.CanvasTexture(sc);const screenMaterial=new THREE.MeshBasicMaterial({map:screenTexture});const screen=box(g,0,1.56,-.145,.82,.48,.018,screenMaterial,false);workstationScreens.push({screen,label,canvas:sc,ctx:sx,texture:screenTexture});box(g,0,.55,1.05,.62,.12,.62,dark);box(g,0,1.0,1.32,.62,.82,.12,mat(0x263b42,.45,.7));box(g,-.78,.36,-.1,.72,.48,.55,mat(0x29363b,.7,.55));for(let i=0;i<3;i++)box(g,-.78,.65+i*.08,-.1,.48,.025,.42,steel,false);return g;}
+function makeWorkstation(x,z,label){const g=new THREE.Group();g.position.set(x,0,z);scene.add(g);box(g,0,.92,0,2.0,.12,1.05,mat(0x59666a,.65,.65));box(g,0,.48,-.36,1.45,.78,.12,steel);box(g,0,1.55,-.22,.92,.62,.10,dark);const sc=document.createElement('canvas');sc.width=512;sc.height=300;const sx=sc.getContext('2d');sx.fillStyle='#061923';sx.fillRect(0,0,512,300);sx.fillStyle='#35e4df';sx.font='bold 30px sans-serif';sx.fillText(label,22,42);sx.fillStyle='#9de8e5';sx.font='22px sans-serif';sx.fillText('CAM-01  ONLINE',22,95);sx.fillText('检测记录  /  分拣日志',22,142);sx.fillStyle='#16d9df';sx.fillRect(22,168,460,3);sx.fillStyle='#b7d9dc';sx.font='20px sans-serif';sx.fillText('等待实时数据...',22,214);const screenTexture=new THREE.CanvasTexture(sc);const screenMaterial=new THREE.MeshBasicMaterial({map:screenTexture});const screen=box(g,0,1.56,-.145,.82,.48,.018,screenMaterial,false);workstationScreens.push({screen,label,canvas:sc,ctx:sx,texture:screenTexture});// 工位椅：座面下增加四条落地椅腿，靠背与座面连接，消除悬空感
+ box(g,0,.55,1.05,.68,.14,.68,dark);
+ for(const sx0 of [-.24,.24])for(const sz0 of [.82,1.28]){
+  box(g,sx0,.275,sz0,.075,.55,.075,steel);
+  box(g,sx0,.045,sz0,.14,.07,.14,rubberMachine,false);
+ }
+ // 靠背支架连接座面，靠背下沿贴近座面
+ box(g,0,.82,1.34,.075,.58,.075,steel);
+ box(g,0,1.02,1.37,.62,.48,.12,mat(0x263b42,.45,.7));box(g,-.78,.36,-.1,.72,.48,.55,mat(0x29363b,.7,.55));for(let i=0;i<3;i++)box(g,-.78,.65+i*.08,-.1,.48,.025,.42,steel,false);return g;}
 makeWorkstation(11.2,2.0,'A01 操作台');makeWorkstation(-11.2,1.9,'视觉检测操作台');box(scene,0,.35,-8.1,29,.22,.38,ductMat);for(let x=-14;x<=14;x+=2)box(scene,x,.48,-8.1,.045,.08,.42,steel,false);
 // 设备状态灯
 const lamps=[];
@@ -744,9 +768,9 @@ function animate(){
   robot.wrist.rotation.x=-.10;
   if(q>=1){p.visible=false;p.userData.state='stored';p.userData.storedT=0;rejectStored++;activePick=null;robot.shoulder.rotation.x=0;robot.elbow.rotation.x=0;robot.wrist.rotation.x=0;robot.fingerL.position.x=-.19;robot.fingerR.position.x=.19;logSort('<span style="color:#ff7777">缺陷件已投入旁侧废品箱</span>');const rs=document.getElementById('robotState');if(rs)rs.textContent='复位中';setTimeout(()=>{if(rs)rs.textContent='待机';},650);const rd=document.getElementById('robotDot');if(rd)rd.className='dot';updateProductionBoard();}
  }else{robot.shoulder.rotation.x=Math.sin(t*1.2)*.035;robot.elbow.rotation.x=.10+Math.sin(t*1.2+1)*.025;robot.wrist.rotation.x=Math.sin(t*.9)*.025;}
- // 主轴旋转、舱门开合及告警灯与实时转速/温度联动
+ // 主轴旋转及告警灯与实时转速/温度联动；机床观察门保持固定关闭
  const tele=window.twinTelemetry||{rpm:3200,temp:36.5};
- machineDynamics.forEach(d=>{d.spindle.rotation.y+=Math.max(.008,(tele.rpm||3200)/3200*.045);const hot=(tele.temp||36.5)>36.9;d.beacon.material.color.setHex(hot?0xff5a35:0x27e5a0);d.beacon.material.emissive.setHex(hot?0x8a1808:0x087c45);d.doorGlass.position.x=Math.sin(t*.7+d.phase)>.92?-.72:0;});
+ machineDynamics.forEach(d=>{d.spindle.rotation.y+=Math.max(.008,(tele.rpm||3200)/3200*.045);const hot=(tele.temp||36.5)>36.9;d.beacon.material.color.setHex(hot?0xff5a35:0x27e5a0);d.beacon.material.emissive.setHex(hot?0x8a1808:0x087c45);});
  // 缺陷件被抓取时工人转头观察废品区并清点；空闲时才沿安全通道短距离巡检
  if(workerMode==='inspectReject'){worker.head.rotation.y=.95;worker.armR.rotation.z=-.75+Math.sin(t*5)*.10;worker.armL.rotation.z=.35;workerTimer+=.016;if(workerTimer>2.8){workerMode='station';workerTimer=0;worker.head.rotation.y=0;worker.armR.rotation.z=0;worker.armL.rotation.z=0;const ws=document.getElementById('workerState');if(ws)ws.textContent='工位监控';}}
  else{workerTimer+=.016;if(workerTimer>18){workerMode='patrol';workerTimer=0;patrolTarget=patrolTarget===0?1:0;}if(workerMode==='patrol'){const tx=patrolTarget?4.8:3.0,tz=patrolTarget?7.0:10.0;worker.root.position.x+=(tx-worker.root.position.x)*.012;worker.root.position.z+=(tz-worker.root.position.z)*.012;worker.legL.rotation.x=Math.sin(t*5)*.24;worker.legR.rotation.x=-Math.sin(t*5)*.24;if(Math.abs(worker.root.position.x-tx)<.12&&Math.abs(worker.root.position.z-tz)<.12){workerMode='station';worker.legL.rotation.x=0;worker.legR.rotation.x=0;}}}
