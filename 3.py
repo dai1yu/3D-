@@ -305,13 +305,14 @@ function makeMachine(x,z,label){
   g.userData.label=label;machineDynamics.push({spindle,beacon});return g;
 }
 // 主生产线：传送带直接对接机床进料侧，机械臂位于交接工位
+// 六台机床统一排成前后两排、每排三台，横向间距一致并以厂房中心线对齐
 const machines=[
- makeMachine(7,4,'数控加工中心 A01'),
- makeMachine(7,-5,'数控车床 B02'),
- makeMachine(-7,-5,'精密检测工作站 E05'),
- makeMachine(-7,4,'立式加工中心 F06'),
- makeMachine(0,-10.5,'高速钻攻中心 G07'),
- makeMachine(8,-10.5,'精密铣削中心 H08')
+ makeMachine(-7,4,'数控加工中心 A01'),
+ makeMachine(0,4,'数控车床 B02'),
+ makeMachine(7,4,'精密检测工作站 E05'),
+ makeMachine(-7,-5,'立式加工中心 F06'),
+ makeMachine(0,-5,'高速钻攻中心 G07'),
+ makeMachine(7,-5,'精密铣削中心 H08')
 ];
 
 // 加长并前移的传送带：机床模型、位置、尺寸和朝向保持不变
