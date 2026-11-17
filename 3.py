@@ -1,6 +1,114 @@
 import streamlit as st
 import streamlit.components.v1 as components
 from datetime import datetime
+import streamlit as st
+import streamlit.components.v1 as components
+
+# ---------------------- 国内CDN版本HTML ----------------------
+html_code = '''
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>3D工厂数字孪生</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:#0f1722;overflow:hidden;height:100vh;}
+#container{width:100%;height:100%;}
+.load-wrap{
+    position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+    text-align:center;color:#36d1dc;z-index:10;
+}
+.load-circle{
+    width:48px;height:48px;border:3px solid #1a2938;
+    border-top-color:#36d1dc;border-radius:50%;
+    animation: spin 1s linear infinite;margin:0 auto 12px;
+}
+@keyframes spin{to{transform:rotate(360deg);}}
+.err-tip{color:#ff5555;margin-top:8px;font-size:14px;display:none;}
+</style>
+</head>
+<body>
+<div id="container">
+    <div class="load-wrap">
+        <div class="load-circle"></div>
+        <div>3D工厂场景加载中...</div>
+        <div class="err-tip" id="errMsg">Three.js加载失败，请检查网络连接</div>
+    </div>
+</div>
+
+<!-- ========== 国内BootCDN 替换原来国外CDN ========== -->
+<script src="https://cdn.bootcdn.net/ajax/libs/three.js/0.160.0/three.min.js"></script>
+<script src="https://cdn.bootcdn.net/ajax/libs/three.js/0.160.0/examples/js/controls/OrbitControls.js"></script>
+
+<script>
+let scene, camera, renderer, controls;
+const errDom = document.getElementById('errMsg');
+
+try{
+    init();
+    animate();
+}catch(e){
+    console.error(e);
+    errDom.style.display = 'block';
+}
+
+function init(){
+    // 场景
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0f1722);
+    // 相机
+    camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 2000);
+    camera.position.set(12,10,12);
+    // 渲染器
+    renderer = new THREE.WebGLRenderer({antialias:true});
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.getElementById('container').appendChild(renderer.domElement);
+    // 轨道控制器
+    controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+
+    // 光源
+    const ambient = new THREE.AmbientLight(0xffffff,0.6);
+    scene.add(ambient);
+    const dirLight = new THREE.DirectionalLight(0xffffff,0.8);
+    dirLight.position.set(10,20,10);
+    scene.add(dirLight);
+
+    // ========== 这里是你的工厂模型代码，把你原来的模型代码贴到下面 ==========
+    // ---------------- 【在这里粘贴你原来工厂、机床、零件模型代码】----------------
+    const geo = new THREE.BoxGeometry(4,2,3);
+    const mat = new THREE.MeshStandardMaterial({color:0x4488dd});
+    const box = new THREE.Mesh(geo,mat);
+    scene.add(box);
+    // -----------------------------------------------------------------------
+
+    window.addEventListener('resize', onWindowResize);
+}
+
+function onWindowResize(){
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+function animate(){
+    requestAnimationFrame(animate);
+    controls.update();
+    renderer.render(scene, camera);
+}
+</script>
+</body>
+</html>
+'''
+
+# streamlit页面配置
+st.set_page_config(page_title="智能工厂数字孪生平台", layout="wide")
+st.title("智能工厂数字孪生平台")
+
+# 嵌入3D页面，高度按需调整
+components.html(html_code, height=750, scrolling=False)
+
 st.set_page_config(
     page_title="智能工厂数字孪生平台｜零件改版+多机床版",
     page_icon="🏭",
