@@ -262,7 +262,7 @@ const machines=[
  makeMachine(-7,-5,'精密检测工作站 E05')
 ];
 
-// 一体化传送带：从左侧上料，右端直接进入 A01 机床前方
+// 一体化传送带：反向输送，从右侧上料，工件向左经过检测工位
 const beltMat=mat(0x253f49,.65,.4);
 box(scene,-1.1,.43,5.35,12.2,.52,1.65,beltMat);
 box(scene,-1.1,.72,5.35,11.9,.08,1.35,mat(0x0a5963,.5,.3));
@@ -276,14 +276,14 @@ box(scene,-1.1,.92,4.55,12.0,.12,.10,steel);
 box(scene,-1.1,.92,6.15,12.0,.12,.10,steel);
 box(scene,5.25,.78,5.35,.45,.18,1.55,yellow);
 
-// 工件沿输送线移动；视觉检测后由机械臂将缺陷件分拣到旁侧红色料箱
+// 工件由右向左沿输送线移动；经过检测工位后由机械臂将缺陷件分拣到旁侧红色料箱
 const workpieces=[];
 const partMaterials=[mat(0xe0b52d,.45,.34),mat(0x8aa7ad,.55,.3),mat(0x16a6ad,.4,.3),mat(0xc0cbd0,.55,.3)];
 for(let i=0;i<4;i++){
  const group=new THREE.Group();
  const body=new THREE.Mesh(new THREE.BoxGeometry(.78,.38,.72),partMaterials[i]);body.castShadow=true;group.add(body);
  if(i!==2){const cap=new THREE.Mesh(new THREE.BoxGeometry(.30,.13,.28),yellow);cap.position.y=.245;group.add(cap);}
- group.position.set(-6.2+i*2.75,1.02,5.35);scene.add(group);
+ group.position.set(5.1-i*2.75,1.02,5.35);scene.add(group);
  group.userData={index:i,offset:i*2.75,state:'moving',bad:i===2||i===3,missing:i===2,classified:false};
  workpieces.push(group);
 }
@@ -430,13 +430,13 @@ function animate(){
   robot.wrist.rotation.x=-.10;
   if(q>=1){p.visible=false;p.userData.state='stored';p.userData.storedT=0;rejectStored++;activePick=null;robot.shoulder.rotation.x=0;robot.elbow.rotation.x=0;robot.wrist.rotation.x=0;robot.fingerL.position.x=-.19;robot.fingerR.position.x=.19;logSort('<span style="color:#ff7777">缺陷件已投入旁侧废品箱</span>');updateProductionBoard();}
  }else{robot.shoulder.rotation.x=Math.sin(t*1.2)*.035;robot.elbow.rotation.x=.10+Math.sin(t*1.2+1)*.025;robot.wrist.rotation.x=Math.sin(t*.9)*.025;}
- beltRollers.forEach(roller=>{roller.rotation.x+=.045;});
+ beltRollers.forEach(roller=>{roller.rotation.x-=.045;});
  workpieces.forEach(part=>{
   // 分拣完成的工件短暂进入废品箱后，模拟新工件补料，重新回到传送带入口
   if(part.userData.state==='stored'){
    part.userData.storedT=(part.userData.storedT||0)+.016;
    if(part.userData.storedT>1.35){
-    part.position.set(-6.2,1.02,5.35);part.visible=true;
+    part.position.set(5.1,1.02,5.35);part.visible=true;
     part.userData.classified=false;part.userData.state='moving';
     part.userData.bad=Math.random()<.30;part.userData.missing=part.userData.bad&&Math.random()<.5;
     part.userData.pickT=0;part.userData.storedT=0;
@@ -449,12 +449,12 @@ function animate(){
    return;
   }
   if(part.userData.state==='moving'||part.userData.state==='passed'){
-   part.position.x+=.012;
+   part.position.x-=.012;
    if(!part.userData.classified&&part.position.x>=-1.1){
     if(activePick&&part.userData.bad){part.position.x=-1.1;part.userData.state='queued';}
     else classifyPart(part);
    }
-   if(part.position.x>5.1){part.position.x=-6.2;part.userData.classified=false;part.userData.state='moving';part.userData.bad=Math.random()<.30;part.userData.missing=part.userData.bad&&Math.random()<.5;part.userData.pickT=0;part.visible=true;}
+   if(part.position.x<-6.2){part.position.x=5.1;part.userData.classified=false;part.userData.state='moving';part.userData.bad=Math.random()<.30;part.userData.missing=part.userData.bad&&Math.random()<.5;part.userData.pickT=0;part.visible=true;}
   }
  });
  detectFrame.material.opacity=.55+.45*Math.sin(t*3);detectFrame.material.transparent=true;detectBeam.intensity=4+1.5*Math.sin(t*4);
