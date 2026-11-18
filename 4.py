@@ -708,9 +708,7 @@ const emergencyCap=new THREE.Mesh(new THREE.CylinderGeometry(.105,.105,.045,24),
 box(line2Console,-.40,1.235,.40,.92,.045,.34,mat(0x17252c,.25,.55));
 for(let r=0;r<3;r++)for(let c=0;c<12;c++)box(line2Console,-.82+c*.075,1.263,.29+r*.075,.055,.012,.045,consoleEdge,false);
 const mouse=new THREE.Mesh(new THREE.SphereGeometry(.095,16,12),mat(0x18252b,.3,.45));mouse.scale.set(.72,.28,1.15);mouse.position.set(.35,1.27,.40);line2Console.add(mouse);
-// 带靠背工位凳
-box(line2Console,0,.58,1.48,.68,.14,.68,dark);for(const xx of [-.24,.24])for(const zz of [1.24,1.72])box(line2Console,xx,.29,zz,.07,.55,.07,steel);
-box(line2Console,0,.87,1.80,.075,.55,.075,steel);box(line2Console,0,1.08,1.83,.64,.43,.13,mat(0x263b42,.45,.7));
+// 产线02工位不设置凳子：此处仅保留电脑桌与操作终端。
 for(let i=0;i<10;i++)box(secondaryLine,-10+i*2.15,.93,0,.10,.10,1.65,steel,false);
 const moduleSignCanvas=document.createElement('canvas');moduleSignCanvas.width=512;moduleSignCanvas.height=128;const moduleSignCtx=moduleSignCanvas.getContext('2d');moduleSignCtx.fillStyle='#09232b';moduleSignCtx.fillRect(0,0,512,128);moduleSignCtx.strokeStyle='#21d8df';moduleSignCtx.lineWidth=5;moduleSignCtx.strokeRect(4,4,504,120);moduleSignCtx.fillStyle='#c9ffff';moduleSignCtx.font='bold 38px Microsoft YaHei';moduleSignCtx.textAlign='center';moduleSignCtx.fillText('产线 02 · 五轴联动加工模块',256,78);const moduleSign=new THREE.Mesh(new THREE.PlaneGeometry(5.8,1.1),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(moduleSignCanvas),transparent:true,side:THREE.DoubleSide}));moduleSign.position.set(0,4.15,-4.8);secondaryLine.add(moduleSign);
 // 两名车间巡检工人：白色安全帽、藏青工装、银灰反光条与完整四肢
@@ -890,10 +888,10 @@ function makeWorkstation(x,z,label){const g=new THREE.Group();g.position.set(x,0
 makeWorkstation(11.2,2.0,'A01 操作台');makeWorkstation(-11.2,1.9,'视觉检测操作台');
 // 产线02操作员初始站立在电脑桌旁；启动巡检后沿产线外围路线巡检。
 const line2DeskX=33,line2DeskZ=1.3;
-const line2ChairWorldZ=line2DeskZ+1.48;
-worker3=makeWorker(line2DeskX,line2ChairWorldZ);worker3.root.rotation.y=Math.PI;
+const line2WorkerStandZ=line2DeskZ+1.05;
+worker3=makeWorker(line2DeskX,line2WorkerStandZ);worker3.root.rotation.y=Math.PI;
 // 返回目标为电脑工位旁的站立点；巡检关闭后沿通道返回并保持站立。
-patrolAgents[2]=makePatrolAgent(worker3,line2PatrolRoute,{x:line2DeskX,z:line2ChairWorldZ},36.0,Math.PI*.5,0);
+patrolAgents[2]=makePatrolAgent(worker3,line2PatrolRoute,{x:line2DeskX,z:line2WorkerStandZ},36.0,Math.PI*.5,0);
 box(scene,0,.35,-8.1,29,.22,.38,ductMat);for(let x=-14;x<=14;x+=2)box(scene,x,.48,-8.1,.045,.08,.42,steel,false);
 // 设备状态灯
 const lamps=[];
