@@ -726,30 +726,24 @@ function makeWorker(x=0,z=0){
  box(g,.29,.86,.02,.16,.19,.20,mat(0x263d50,.2,.7));
  return {root:g,head,armL,armR,legL,legR};
 }
-const worker=makeWorker(-8.8,1.2),worker2=makeWorker(-5.2,6.8);
-let workerMode='station',workerTimer=0,patrolTarget=0,screenRefresh=-1,patrolEnabled=false;
-// 巡检路线沿 A01 机床外围闭环布置，两名工人错峰行走，避免重叠
-const patrolRoute=[new THREE.Vector3(-10.0,0,1.1),new THREE.Vector3(-4.0,0,1.1),new THREE.Vector3(-4.0,0,7.0),new THREE.Vector3(-10.0,0,7.0)];
-function updatePatrolPerson(person,phase,dt){
- if(!patrolEnabled)return;
- const speed=.72,routeLen=6.0,edge=5.9;
- let d=(performance.now()*.001*speed+phase)%(2*(routeLen+edge));
- let a,b,k;
- if(d<routeLen){a=patrolRoute[0];b=patrolRoute[1];k=d/routeLen;}
- else if((d-=routeLen)<edge){a=patrolRoute[1];b=patrolRoute[2];k=d/edge;}
- else if((d-=edge)<routeLen){a=patrolRoute[2];b=patrolRoute[3];k=d/routeLen;}
- else{d-=routeLen;a=patrolRoute[3];b=patrolRoute[0];k=d/edge;}
- person.root.position.lerpVectors(a,b,k);
- const dir=new THREE.Vector3().subVectors(b,a);person.root.rotation.y=Math.atan2(dir.x,dir.z);
- const swing=Math.sin(performance.now()*.006+phase)*.42;
- person.armL.rotation.x=swing;person.armR.rotation.x=-swing;
- person.legL.rotation.x=-swing*.72;person.legR.rotation.x=swing*.72;
-}
-window.addEventListener('twin-patrol-toggle',e=>{
- patrolEnabled=!!e.detail.enabled;
- if(patrolEnabled){workerMode='patrol';document.getElementById('workerState').textContent='双人巡检';}
- else{workerMode='station';worker.armL.rotation.x=worker.armR.rotation.x=0;worker.legL.rotation.x=worker.legR.rotation.x=0;worker2.armL.rotation.x=worker2.armR.rotation.x=0;worker2.legL.rotation.x=worker2.legR.rotation.x=0;document.getElementById('workerState').textContent='待命';}
-});
+// 三名巡检人员分别在主产线两台电脑、产线02电脑前待命；巡检路线只走设备外围通道。
+const worker=makeWorker(-11.2,4.0),worker2=makeWorker(11.2,4.0);
+worker.root.rotation.y=Math.PI;worker2.root.rotation.y=Math.PI;
+let workerMode='station',workerTimer=0,screenRefresh=-1,patrolEnabled=false,worker3=null;
+const mainPatrolRoute=[new THREE.Vector3(-10.35,0,-7.65),new THREE.Vector3(10.35,0,-7.65),new THREE.Vector3(10.35,0,11.25),new THREE.Vector3(-10.35,0,11.25)];
+const line2PatrolRoute=[new THREE.Vector3(10.0,0,-7.55),new THREE.Vector3(36.0,0,-7.55),new THREE.Vector3(36.0,0,6.1),new THREE.Vector3(10.0,0,6.1)];
+function routeMetrics(route){const lengths=[];let total=0;for(let i=0;i<route.length;i++){const n=route[(i+1)%route.length];const len=route[i].distanceTo(n);lengths.push(len);total+=len;}return {lengths,total};}
+function routePoint(route,metrics,distance){let d=((distance%metrics.total)+metrics.total)%metrics.total;for(let i=0;i<route.length;i++){const len=metrics.lengths[i];if(d<=len){const k=len?d/len:0;return {point:route[i].clone().lerp(route[(i+1)%route.length],k),segment:i};}d-=len;}return {point:route[0].clone(),segment:0};}
+function routeDistanceToSide(route,metrics,side,z){let best=0,bestDist=Infinity,cum=0;for(let i=0;i<route.length;i++){const a=route[i],b=route[(i+1)%route.length],dx=b.x-a.x,dz=b.z-a.z;let t=0;if(Math.abs(dx)<.001)t=Math.max(0,Math.min(1,(z-a.z)/(dz||1)));else t=Math.max(0,Math.min(1,(side-a.x)/(dx||1)));const q=a.clone().lerp(b,t),err=Math.hypot(q.x-side,q.z-z);if(err<bestDist){bestDist=err;best=cum+metrics.lengths[i]*t;}cum+=metrics.lengths[i];}return best;}
+function setWalkPose(person,dir,phase=0){person.root.rotation.y=Math.atan2(dir.x,dir.z);const swing=Math.sin(performance.now()*.008+phase)*.34;person.armL.rotation.x=swing;person.armR.rotation.x=-swing;person.legL.rotation.x=-swing*.78;person.legR.rotation.x=swing*.78;}
+function advanceAgent(agent,dt){const p=agent.person,speed=agent.speed||1.05;let remaining=speed*dt;while(remaining>0.0001&&agent.path&&agent.index<agent.path.length){const target=agent.path[agent.index],delta=target.clone().sub(p.root.position);const dist=delta.length();if(dist<.025){p.root.position.copy(target);agent.index++;continue;}const step=Math.min(remaining,dist);delta.normalize();p.root.position.addScaledVector(delta,step);setWalkPose(p,delta,agent.phase||0);remaining-=step;}return !!(agent.path&&agent.index>=agent.path.length);}
+function makePatrolAgent(person,route,home,side,phase){const metrics=routeMetrics(route);return {person,route,metrics,home:new THREE.Vector3(home.x,0,home.z),side,phase,mode:'station',distance:0,direction:1,speed:1.05,path:null,index:0};}
+const patrolAgents=[makePatrolAgent(worker,mainPatrolRoute,{x:-11.2,z:4.0},-10.35,0),makePatrolAgent(worker2,mainPatrolRoute,{x:11.2,z:4.0},10.35,Math.PI),null];
+function beginPatrol(agent){const p=agent.person;const entry=new THREE.Vector3(agent.side,0,4.0);agent.path=[entry];agent.index=0;agent.mode='outbound';agent.distance=routeDistanceToSide(agent.route,agent.metrics,agent.side,4.0);}
+function beginReturn(agent){if(agent.mode==='outbound'){agent.path=[agent.home];agent.index=0;agent.mode='homeward';return;}const targetDist=routeDistanceToSide(agent.route,agent.metrics,agent.side,4.0);const forward=(targetDist-agent.distance+agent.metrics.total)%agent.metrics.total;const backward=(agent.distance-targetDist+agent.metrics.total)%agent.metrics.total;agent.direction=forward<=backward?1:-1;agent.returnTarget=targetDist;agent.mode='returnLoop';agent.path=null;agent.index=0;}
+function pClone(v){return new THREE.Vector3(v.x,0,v.z);}
+function updatePatrolAgent(agent,dt){const p=agent.person;if(agent.mode==='outbound'){if(advanceAgent(agent,dt)){agent.mode='patrol';agent.distance=routeDistanceToSide(agent.route,agent.metrics,agent.side,4.0);}}else if(agent.mode==='patrol'){agent.distance=(agent.distance+agent.speed*dt)%agent.metrics.total;const here=routePoint(agent.route,agent.metrics,agent.distance),next=routePoint(agent.route,agent.metrics,agent.distance+.12).point,dir=next.sub(here.point);p.root.position.copy(here.point);setWalkPose(p,dir,agent.phase);}else if(agent.mode==='returnLoop'){const diff=agent.direction>0?(agent.returnTarget-agent.distance+agent.metrics.total)%agent.metrics.total:(agent.distance-agent.returnTarget+agent.metrics.total)%agent.metrics.total;const step=Math.min(diff,agent.speed*dt);agent.distance=(agent.distance+agent.direction*step+agent.metrics.total)%agent.metrics.total;const here=routePoint(agent.route,agent.metrics,agent.distance),next=routePoint(agent.route,agent.metrics,agent.distance+agent.direction*.12).point,dir=next.sub(here.point);p.root.position.copy(here.point);setWalkPose(p,dir,agent.phase);if(diff<=step+.001){const entry=routePoint(agent.route,agent.metrics,agent.returnTarget).point;agent.path=[agent.home];agent.index=0;agent.mode='homeward';}}else if(agent.mode==='homeward'){if(advanceAgent(agent,dt)){agent.mode='station';p.root.rotation.y=Math.PI;p.armL.rotation.x=p.armR.rotation.x=p.legL.rotation.x=p.legR.rotation.x=0;}}}
+window.addEventListener('twin-patrol-toggle',e=>{patrolEnabled=!!e.detail.enabled;for(const agent of patrolAgents){if(!agent)continue;if(patrolEnabled)beginPatrol(agent);else if(agent.mode!=='station')beginReturn(agent);}if(worker3){if(patrolEnabled)beginPatrol(patrolAgents[2]);else if(patrolAgents[2].mode!=='station')beginReturn(patrolAgents[2]);}document.getElementById('workerState').textContent=patrolEnabled?'三人设备巡检':'巡检人员返回工位';});
 const sparkCount=90,sparkPositions=new Float32Array(sparkCount*3),sparkGeo=new THREE.BufferGeometry();sparkGeo.setAttribute('position',new THREE.BufferAttribute(sparkPositions,3));const sparks=new THREE.Points(sparkGeo,new THREE.PointsMaterial({color:0xffb34d,size:.075,transparent:true,opacity:.9}));scene.add(sparks);
 function burstSparks(){for(let i=0;i<sparkCount;i++){sparkPositions[i*3]=7+(Math.random()-.5)*.8;sparkPositions[i*3+1]=1.5+Math.random()*.5;sparkPositions[i*3+2]=4+(Math.random()-.5)*.8;}sparkGeo.attributes.position.needsUpdate=true;}
 
@@ -843,7 +837,20 @@ function makeWorkstation(x,z,label){const g=new THREE.Group();g.position.set(x,0
  // 靠背支架连接座面，靠背下沿贴近座面
  box(g,0,.82,1.34,.075,.58,.075,steel);
  box(g,0,1.02,1.37,.62,.48,.12,mat(0x263b42,.45,.7));box(g,-.78,.36,-.1,.72,.48,.55,mat(0x29363b,.7,.55));for(let i=0;i<3;i++)box(g,-.78,.65+i*.08,-.1,.48,.025,.42,steel,false);return g;}
-makeWorkstation(11.2,2.0,'A01 操作台');makeWorkstation(-11.2,1.9,'视觉检测操作台');box(scene,0,.35,-8.1,29,.22,.38,ductMat);for(let x=-14;x<=14;x+=2)box(scene,x,.48,-8.1,.045,.08,.42,steel,false);
+makeWorkstation(11.2,2.0,'A01 操作台');makeWorkstation(-11.2,1.9,'视觉检测操作台');
+// 产线02红色工作台补齐电脑、键盘和带靠背凳子；工人站在凳子前面，巡检结束回到该工位。
+const line2DeskX=33,line2DeskZ=1.3;
+box(scene,line2DeskX,1.48,line2DeskZ-.48,.78,.055,.34,dark); // 键盘
+box(scene,line2DeskX,1.92,line2DeskZ-.58,.82,.62,.09,steel);
+box(scene,line2DeskX,1.96,line2DeskZ-.515,.70,.47,.018,screenMat,false);
+box(scene,line2DeskX,1.70,line2DeskZ-.53,.12,.12,.12,steel); // 显示器支架
+box(scene,line2DeskX,1.30,line2DeskZ+.82,.72,.13,.68,dark);
+for(const sx0 of [-.25,.25])for(const sz0 of [.58,1.06])box(scene,line2DeskX+sx0,.65,line2DeskZ+sz0,.07,1.2,.07,steel);
+box(scene,line2DeskX,1.02,line2DeskZ+1.12,.07,.62,.07,steel);box(scene,line2DeskX,1.34,line2DeskZ+1.14,.68,.42,.12,mat(0x263b42,.45,.7));
+worker3=makeWorker(line2DeskX,line2DeskZ+2.15);worker3.root.rotation.y=Math.PI;
+// 巡检人员回到电脑前时保持站立待命，工位凳用于日常操作展示。
+patrolAgents[2]=makePatrolAgent(worker3,line2PatrolRoute,{x:line2DeskX,z:line2DeskZ+2.15},36.0,Math.PI*.5);
+box(scene,0,.35,-8.1,29,.22,.38,ductMat);for(let x=-14;x<=14;x+=2)box(scene,x,.48,-8.1,.045,.08,.42,steel,false);
 // 设备状态灯
 const lamps=[];
 machines.forEach((m,i)=>{
@@ -889,7 +896,7 @@ function animate(){
  fiveAxisDynamics.forEach((d,i)=>{d.spindle.rotation.y+=Math.max(.008,(tele.rpm||3200)/3200*.04);d.trunnion.rotation.x=Math.sin(t*.42+i*.7)*.10;d.mag.rotation.x+=.0015;});
  // 双人巡检沿机床外围持续行走；缺陷分拣时第一名工人短暂转头关注
  if(workerMode==='inspectReject'){worker.head.rotation.y=.48;worker.armR.rotation.x=-.25+Math.sin(t*5)*.045;workerTimer+=.016;if(workerTimer>2.8){workerMode=patrolEnabled?'patrol':'station';workerTimer=0;worker.head.rotation.y=0;}}
- if(patrolEnabled){updatePatrolPerson(worker,0,1/60);updatePatrolPerson(worker2,Math.PI*5,1/60);}
+ patrolAgents.forEach(agent=>{if(agent)updatePatrolAgent(agent,1/60);});if(!patrolEnabled&&patrolAgents.every(agent=>agent&&agent.mode==='station')){const ws=document.getElementById('workerState');if(ws)ws.textContent='电脑前待命';}
  if(Math.floor(t*2)%7===0&&Math.random()<.035)burstSparks();
  // 远距离自动降低第二模块细节负载（LOD）
  secondaryLine.visible=camera.position.distanceTo(secondaryLine.position)<58;
@@ -955,7 +962,7 @@ function togglePatrol(){
  patrolOn=!patrolOn;const b=document.getElementById('patrolBtn');
  b.classList.toggle('active',patrolOn);
  window.dispatchEvent(new CustomEvent('twin-patrol-toggle',{detail:{enabled:patrolOn}}));
- showToast(patrolOn?'双人设备巡检已启动':'设备巡检已暂停');
+ showToast(patrolOn?'三名巡检人员已启动，沿设备外围通道巡检':'巡检已关闭，人员正沿安全通道返回电脑工位');
 }
 function selectDevice(el,name){
  document.querySelectorAll('.device').forEach(x=>x.classList.remove('selected'));
