@@ -928,7 +928,7 @@ function warningSign(x,y,z,textLabel){
  box(g,0,-1.72,-.035,.52,.12,.42,dark);
  box(g,0,-1.64,-.035,.38,.08,.30,steel);
 }
-warningSign(12,2.4,5.5,'注意夹伤');warningSign(-13,2.2,5.5,'安全通道');
+warningSign(-13,2.2,5.5,'安全通道');
 // 工位工作台、实时数据屏、工位椅、工具箱与线槽
 const workstationScreens=[];
 function makeWorkstation(x,z,label){const g=new THREE.Group();g.position.set(x,0,z);scene.add(g);box(g,0,.92,0,2.0,.12,1.05,mat(0x59666a,.65,.65));box(g,0,.48,-.36,1.45,.78,.12,steel);box(g,0,1.55,-.22,.92,.62,.10,dark);const sc=document.createElement('canvas');sc.width=512;sc.height=300;const sx=sc.getContext('2d');sx.fillStyle='#061923';sx.fillRect(0,0,512,300);sx.fillStyle='#35e4df';sx.font='bold 30px sans-serif';sx.fillText(label,22,42);sx.fillStyle='#9de8e5';sx.font='22px sans-serif';sx.fillText('CAM-01  ONLINE',22,95);sx.fillText('检测记录  /  分拣日志',22,142);sx.fillStyle='#16d9df';sx.fillRect(22,168,460,3);sx.fillStyle='#b7d9dc';sx.font='20px sans-serif';sx.fillText('等待实时数据...',22,214);const screenTexture=new THREE.CanvasTexture(sc);const screenMaterial=new THREE.MeshBasicMaterial({map:screenTexture});const screen=box(g,0,1.56,-.145,.82,.48,.018,screenMaterial,false);workstationScreens.push({screen,label,canvas:sc,ctx:sx,texture:screenTexture});// 工位椅：座面下增加四条落地椅腿，靠背与座面连接，消除悬空感
