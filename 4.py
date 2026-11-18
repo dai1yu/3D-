@@ -112,8 +112,8 @@ background:rgba(3,35,44,.94);border:1px solid #16d9df;box-shadow:0 0 20px #087b8
 <div class="topbar">
   <div class="brand">智能工厂数字孪生平台<small>INTELLIGENT FACTORY DIGITAL TWIN PLATFORM</small></div>
   <div class="top-actions">
-    <button class="top-btn" id="autoBtn" onclick="toggleAuto()">自动检测</button>
-    <button class="top-btn" id="feedBtn" onclick="toggleFeed()">物件检测</button>
+    <button class="top-btn" id="autoBtn" onclick="toggleAuto()">缺陷检测</button>
+    <button class="top-btn" id="feedBtn" onclick="toggleFeed()">零件检测</button>
     <button class="top-btn" onclick="openPanel('monitor')">数据监测</button>
     <button class="top-btn" id="patrolBtn" onclick="togglePatrol()">设备巡检</button>
     <button class="top-btn" onclick="resetCameraView()">视角复位</button>
@@ -533,7 +533,7 @@ function makeReferencePart(){
 
  return part;
 }
-// 预制工件池初始全部隐藏；只有点击“物件检测”才逐件上料
+// 预制工件池初始全部隐藏；只有点击“零件检测”才逐件上料
 for(let i=0;i<8;i++){
  const group=makeReferencePart();
  group.position.set(10.0,1.00,BELT_Z);
@@ -544,6 +544,8 @@ for(let i=0;i<8;i++){
  workpieces.push(group);
 }
 let materialFeedEnabled=false,autoDetectionEnabled=false,feedSpawnTimer=0,spawnCursor=0;
+// 零件检测由离传送带上料端最近的巡检人员负责；抵达站位后才允许开始上料。
+let feedAttendantAgent=null,feedAttendantReady=false;
 const FEED_INTERVAL=3.0;
 function spawnNextPart(){
  if(!materialFeedEnabled)return false;
@@ -561,8 +563,14 @@ function spawnNextPart(){
  return true;
 }
 window.addEventListener('twin-feed-toggle',e=>{
- materialFeedEnabled=!!e.detail.enabled;feedSpawnTimer=0;
- if(materialFeedEnabled)spawnNextPart();
+ materialFeedEnabled=!!e.detail.enabled;
+ feedSpawnTimer=0;
+ feedAttendantReady=false;
+ if(materialFeedEnabled){
+  if(feedAttendantAgent)beginFeedAttendant(feedAttendantAgent);
+ }else if(feedAttendantAgent){
+  beginFeedAttendantReturn(feedAttendantAgent);
+ }
 });
 window.addEventListener('twin-auto-toggle',e=>{
  autoDetectionEnabled=!!e.detail.enabled;
@@ -808,7 +816,13 @@ function beginReturn(agent){if(agent.mode==='outbound'){agent.path=[agent.home];
 function pClone(v){return new THREE.Vector3(v.x,0,v.z);}
 function updatePatrolAgent(agent,dt){
  const p=agent.person;
- if(agent.mode==='outbound'){
+ if(agent.mode==='feedOutbound'){
+  if(advanceAgent(agent,dt)){agent.mode='feedStation';p.root.rotation.y=Math.PI;p.armL.rotation.x=p.armR.rotation.x=p.legL.rotation.x=p.legR.rotation.x=0;feedAttendantReady=true;feedSpawnTimer=FEED_INTERVAL;const ws=document.getElementById('workerState');if(ws)ws.textContent='上料端值守';}
+ }else if(agent.mode==='feedStation'){
+  p.armL.rotation.x=p.armR.rotation.x=p.legL.rotation.x=p.legR.rotation.x=0;
+ }else if(agent.mode==='feedReturn'){
+  if(advanceAgent(agent,dt)){agent.mode='station';p.root.rotation.y=Math.PI;p.armL.rotation.x=p.armR.rotation.x=p.legL.rotation.x=p.legR.rotation.x=0;const ws=document.getElementById('workerState');if(ws)ws.textContent='电脑前待命';}
+ }else if(agent.mode==='outbound'){
   if(advanceAgent(agent,dt)){agent.mode='patrol';agent.distance=routeDistanceToSide(agent.route,agent.metrics,agent.side,4.0);}
  }else if(agent.mode==='patrol'){
   const nextDistance=(agent.distance+agent.speed*dt)%agent.metrics.total;
@@ -940,7 +954,7 @@ function addPatrolObstacle(cx,cz,hx,hz,margin=.34){patrolObstacleBoxes.push({min
 // 主产线五台机床（保留设备自身真实占地尺寸）
 for(const m of machines)addPatrolObstacle(m.position.x,m.position.z,2.18,1.62,.34);
 // 主传送带及两侧护栏
-addPatrolObstacle(BELT_X,BELT_Z,BELT_LENGTH/2,.90,.32);
+addPatrolObstacle(BELT_X,BELT_Z,BELT_LENGTH/2,1.05,.62);
 // 两台主产线电脑工作台
 addPatrolObstacle(11.2,2.0,1.05,.62,.34);
 addPatrolObstacle(-11.2,1.9,1.05,.62,.34);
@@ -949,6 +963,28 @@ for(const localX of [-8,-2.7,2.6,7.9])addPatrolObstacle(23+localX,-1-3.15,1.92,1
 // 产线02中央传送带与大型 CNC 操作台
 addPatrolObstacle(23,-1,11.5,.78,.38);
 addPatrolObstacle(line2DeskX,line2DeskZ,1.40,.90,.38);
+// 计算离传送带上料端最近的巡检人员。当前场景中会选中主产线右侧工人 W02。
+const feedHeadPoint=new THREE.Vector3(BELT_RIGHT-.8,0,BELT_Z);
+feedAttendantAgent=patrolAgents.filter(Boolean).reduce((best,agent)=>{
+ const d=agent.person.root.position.distanceToSquared(feedHeadPoint);
+ return !best||d<best.distance?{agent,distance:d}:best;
+},null)?.agent||null;
+function beginFeedAttendant(agent){
+ if(!agent)return;
+ // 上料值守路线完全绕开传送带：先走到传送带右端外侧，再从传送带前侧靠近。
+ // 人物中心与传送带边缘保持约 0.85m 安全距离，避免身体、腿脚与模型发生穿模。
+ const staging=new THREE.Vector3(12.6,0,4.0);
+ const approach=new THREE.Vector3(12.6,0,9.45);
+ const feedStand=new THREE.Vector3(11.15,0,9.45);
+ agent.path=[staging,approach,feedStand];agent.index=0;agent.mode='feedOutbound';
+}
+function beginFeedAttendantReturn(agent){
+ if(!agent)return;
+ feedAttendantReady=false;
+ // 关闭零件检测后沿完全相同的安全通道返回，不穿过传送带。
+ agent.path=[new THREE.Vector3(12.6,0,9.45),new THREE.Vector3(12.6,0,4.0),agent.home.clone()];
+ agent.index=0;agent.mode='feedReturn';
+}
 box(scene,0,.35,-8.1,29,.22,.38,ductMat);for(let x=-14;x<=14;x+=2)box(scene,x,.48,-8.1,.045,.08,.42,steel,false);
 // 设备状态灯
 const lamps=[];
@@ -999,10 +1035,13 @@ function animate(){
  if(Math.floor(t*2)%7===0&&Math.random()<.035)burstSparks();
  // 远距离自动降低第二模块细节负载（LOD）
  secondaryLine.visible=camera.position.distanceTo(secondaryLine.position)<58;
- // 传送带只有在点击“物件检测”后才逐件上料并运行
- if(materialFeedEnabled){
+ // 零件检测开启后，先等待值守工人抵达上料端，再按间隔逐件生成新零件。
+ if(materialFeedEnabled&&feedAttendantReady){
   feedSpawnTimer+=1/60;
   if(feedSpawnTimer>=FEED_INTERVAL){feedSpawnTimer=0;spawnNextPart();}
+ }
+ // 只要传送带上还有零件，就持续运行；关闭零件检测只停止新增，不停止已有零件输送。
+ if(workpieces.some(part=>part.visible&&(part.userData.state==='moving'||part.userData.state==='passed'||part.userData.state==='queued'))){
   beltRollers.forEach(roller=>{roller.rotation.x-=.045;});
  }
  workpieces.forEach(part=>{
@@ -1019,7 +1058,8 @@ function animate(){
     const gap=part.position.x-other.position.x;
     if(gap>0&&gap<2.7&&Math.abs(part.position.z-other.position.z)<.45){blockedByPart=true;break;}
    }
-   if(materialFeedEnabled&&!blockedByPart)part.position.x-=.018;
+   // 已经生成的零件始终沿传送带运行；关闭上料功能不影响在途零件。速度设为中等档，避免过慢或过快。
+   if(!blockedByPart)part.position.x-=.024;
    if(autoDetectionEnabled&&!part.userData.classified&&part.position.x<=-1.1){
     if(activePick&&part.userData.bad){part.position.x=-1.1;part.userData.state='queued';}
     else classifyPart(part);
@@ -1047,15 +1087,15 @@ updateClock();setInterval(updateClock,1000);window.twinTelemetry={rpm:3200,temp:
 function toggleAuto(){
  auto=!auto;
  const b=document.getElementById('autoBtn');
- b.classList.toggle('active',auto);b.textContent=auto?'自动检测':'自动检测';
+ b.classList.toggle('active',auto);b.textContent='缺陷检测';
  window.dispatchEvent(new CustomEvent('twin-auto-toggle',{detail:{enabled:auto}}));
- showToast(auto?'自动检测已启动：相机与机械臂开始工作':'自动检测已停止：相机与机械臂待机');
+ showToast(auto?'缺陷检测已启动：相机开始识别传送带零件':'缺陷检测已关闭：相机停止识别');
 }
 function toggleFeed(){
  feedOn=!feedOn;const b=document.getElementById('feedBtn');
- b.classList.toggle('active',feedOn);b.textContent=feedOn?'停止上料':'物件检测';
+ b.classList.toggle('active',feedOn);b.textContent=feedOn?'停止零件检测':'零件检测';
  window.dispatchEvent(new CustomEvent('twin-feed-toggle',{detail:{enabled:feedOn}}));
- showToast(feedOn?'物件检测已启动：工件将逐件进入传送带':'已停止后续工件上料');
+ showToast(feedOn?'零件检测已启动：最近的工人前往上料端，抵达后逐件生成零件':'已停止生成新零件；传送带上的零件继续运行，工人返回工位');
 }
 function togglePatrol(){
  patrolOn=!patrolOn;const b=document.getElementById('patrolBtn');
