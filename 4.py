@@ -226,12 +226,12 @@ const blueLight=new THREE.PointLight(0x087bff,22,30);blueLight.position.set(8,5,
 
 const mat=(color,metalness=.25,roughness=.55,emissive=0x000000)=>new THREE.MeshStandardMaterial({color,metalness,roughness,emissive});
 const floorMat=new THREE.MeshStandardMaterial({color:0x555b5c,metalness:.04,roughness:.96});
-const floor=new THREE.Mesh(new THREE.PlaneGeometry(72,44),floorMat);
+const floor=new THREE.Mesh(new THREE.PlaneGeometry(80,44),floorMat);
 floor.rotation.x=-Math.PI/2;floor.position.y=-.08;floor.receiveShadow=true;scene.add(floor);
 const grid=new THREE.GridHelper(72,72,0x536365,0x414c4e);grid.position.y=-.045;scene.add(grid);
 // 水泥地面接缝、磨损污渍与黄色安全通道线
 const floorDetail=mat(0x777b78,.02,.98), stainMat=new THREE.MeshBasicMaterial({color:0x303638,transparent:true,opacity:.20});
-for(let z=-16;z<=16;z+=4) box(scene,0,-.025,z,68,.012,.025,floorDetail,false);
+for(let z=-16;z<=16;z+=4) box(scene,0,-.025,z,76,.012,.025,floorDetail,false);
 for(let x=-30;x<=30;x+=6) box(scene,x,-.024,0,.025,.012,40,floorDetail,false);
 const safetyYellow=new THREE.MeshStandardMaterial({color:0xe6b52b,roughness:.88});
 for(const z of [-14.8,12.9]) box(scene,0,-.012,z,65,.018,.12,safetyYellow,false);
@@ -726,6 +726,14 @@ function makeWorker(x=0,z=0){
  // 头颈与白色安全帽（帽檐、帽壳、顶部加强筋）
  const neck=new THREE.Mesh(new THREE.CylinderGeometry(.075,.085,.13,16),skin);neck.position.set(0,1.66,0);g.add(neck);
  const head=new THREE.Mesh(new THREE.SphereGeometry(.17,22,16),skin);head.position.set(0,1.86,-.015);g.add(head);
+ // 面部细节：小尺寸眼白、深色瞳孔与高光，朝向人物正前方（+Z），避免远景显得像无脸模型。
+ const eyeWhite=mat(0xf1eee7,.02,.42),eyeIris=mat(0x26343b,.08,.3),eyeGlint=new THREE.MeshBasicMaterial({color:0xffffff});
+ for(const ex of [-.060,.060]){
+  const eye=new THREE.Mesh(new THREE.SphereGeometry(.030,14,10),eyeWhite);eye.position.set(ex,1.875,.133);g.add(eye);
+  const pupil=new THREE.Mesh(new THREE.SphereGeometry(.018,12,9),eyeIris);pupil.position.set(ex,1.875,.158);g.add(pupil);
+  const glint=new THREE.Mesh(new THREE.SphereGeometry(.006,8,6),eyeGlint);glint.position.set(ex-.005,1.884,.173);g.add(glint);
+ }
+ const nose=new THREE.Mesh(new THREE.SphereGeometry(.018,10,8),skin);nose.position.set(0,1.835,.151);g.add(nose);
  const hat=new THREE.Mesh(new THREE.SphereGeometry(.205,24,14,0,Math.PI*2,0,Math.PI/2),helmet);hat.position.set(0,2.00,-.015);g.add(hat);
  const brim=new THREE.Mesh(new THREE.CylinderGeometry(.235,.235,.035,32),helmet);brim.position.set(0,1.99,-.015);g.add(brim);
  box(g,0,2.10,-.015,.045,.045,.26,reflect,false);
@@ -760,37 +768,70 @@ let workerMode='station',workerTimer=0,screenRefresh=-1,patrolEnabled=false,work
 // 主产线左右分区巡检：两名工人分别沿各自机床组外围通道及两排机床之间的横向通道行走。
 // 路径点避开机床实体（机床中心约 x=-7/0/7，前后排 z=4/-5），不再走穿设备的中央折线。
 const leftPatrolRoute=[
- new THREE.Vector3(-10.2,0,7.2), new THREE.Vector3(-2.8,0,7.2),
- new THREE.Vector3(-2.8,0,-7.4), new THREE.Vector3(-10.2,0,-7.4),
- new THREE.Vector3(-10.2,0,-0.65), new THREE.Vector3(-2.8,0,-0.65),
- new THREE.Vector3(-2.8,0,7.2)
+ // 传送带南侧安全通道（z=6.10），沿左侧机床前方巡视
+ new THREE.Vector3(-10.2,0,6.10), new THREE.Vector3(-2.8,0,6.10),
+ // 左侧机床内侧纵向通道、后侧通道及两排机床之间的横向通道
+ new THREE.Vector3(-2.8,0,-7.15), new THREE.Vector3(-10.2,0,-7.15),
+ new THREE.Vector3(-10.2,0,-1.50), new THREE.Vector3(-2.8,0,-1.50),
+ new THREE.Vector3(-2.8,0,6.10)
 ];
 const rightPatrolRoute=[
- new THREE.Vector3(2.8,0,7.2), new THREE.Vector3(10.2,0,7.2),
- new THREE.Vector3(10.2,0,-7.4), new THREE.Vector3(2.8,0,-7.4),
- new THREE.Vector3(2.8,0,-0.65), new THREE.Vector3(10.2,0,-0.65),
- new THREE.Vector3(10.2,0,7.2)
+ // 右侧巡检采用完整外围闭环，不横穿产线02中央传送带所在区域。
+ new THREE.Vector3(2.8,0,6.10), new THREE.Vector3(36.5,0,6.10),
+ new THREE.Vector3(36.5,0,-7.15), new THREE.Vector3(2.8,0,-7.15)
 ];
 // 产线02巡检路线：按用户俯视手绘图采用折线巡回，沿机床外侧通道进入中部横向通道，
 // 再绕开机床端部回到外侧通道；路线点均落在设备间通道，不穿过机床实体。
 const line2PatrolRoute=[
- new THREE.Vector3(33.0,0,5.3), new THREE.Vector3(11.0,0,5.3),
- new THREE.Vector3(11.0,0,-7.55), new THREE.Vector3(17.0,0,-7.55),
- new THREE.Vector3(17.0,0,-1.8), new THREE.Vector3(25.0,0,-1.8),
- new THREE.Vector3(25.0,0,-7.55), new THREE.Vector3(36.0,0,-7.55),
- new THREE.Vector3(36.0,0,6.1), new THREE.Vector3(33.0,0,6.1)
+ // 产线02的五轴机床与中间输送带形成设备岛，巡检路线从设备岛外侧绕行，
+ // 不进入机床门前、传送带或操作台与机床之间的狭窄区域。
+ new THREE.Vector3(9.65,0,5.3), new THREE.Vector3(35.5,0,5.3),
+ new THREE.Vector3(35.5,0,-7.4), new THREE.Vector3(9.65,0,-7.4)
 ];
 function routeMetrics(route){const lengths=[];let total=0;for(let i=0;i<route.length;i++){const n=route[(i+1)%route.length];const len=route[i].distanceTo(n);lengths.push(len);total+=len;}return {lengths,total};}
 function routePoint(route,metrics,distance){let d=((distance%metrics.total)+metrics.total)%metrics.total;for(let i=0;i<route.length;i++){const len=metrics.lengths[i];if(d<=len){const k=len?d/len:0;return {point:route[i].clone().lerp(route[(i+1)%route.length],k),segment:i};}d-=len;}return {point:route[0].clone(),segment:0};}
 function routeDistanceToSide(route,metrics,side,z){let best=0,bestDist=Infinity,cum=0;for(let i=0;i<route.length;i++){const a=route[i],b=route[(i+1)%route.length],dx=b.x-a.x,dz=b.z-a.z;let t=0;if(Math.abs(dx)<.001)t=Math.max(0,Math.min(1,(z-a.z)/(dz||1)));else t=Math.max(0,Math.min(1,(side-a.x)/(dx||1)));const q=a.clone().lerp(b,t),err=Math.hypot(q.x-side,q.z-z);if(err<bestDist){bestDist=err;best=cum+metrics.lengths[i]*t;}cum+=metrics.lengths[i];}return best;}
 function setWalkPose(person,dir,phase=0){person.root.rotation.y=Math.atan2(dir.x,dir.z);const swing=Math.sin(performance.now()*.008+phase)*.34;person.armL.rotation.x=swing;person.armR.rotation.x=-swing;person.legL.rotation.x=-swing*.78;person.legR.rotation.x=swing*.78;}
-function advanceAgent(agent,dt){const p=agent.person,speed=agent.speed||1.05;let remaining=speed*dt;while(remaining>0.0001&&agent.path&&agent.index<agent.path.length){const target=agent.path[agent.index],delta=target.clone().sub(p.root.position);const dist=delta.length();if(dist<.025){p.root.position.copy(target);agent.index++;continue;}const step=Math.min(remaining,dist);delta.normalize();p.root.position.addScaledVector(delta,step);setWalkPose(p,delta,agent.phase||0);remaining-=step;}return !!(agent.path&&agent.index>=agent.path.length);}
+function patrolSegmentIsClear(a,b){
+ const distance=a.distanceTo(b),samples=Math.max(1,Math.ceil(distance/.12));
+ for(let i=0;i<=samples;i++){
+  const t=i/samples,x=a.x+(b.x-a.x)*t,z=a.z+(b.z-a.z)*t;
+  for(const o of patrolObstacleBoxes){if(x>=o.minX&&x<=o.maxX&&z>=o.minZ&&z<=o.maxZ)return false;}
+ }
+ return true;
+}
+function advanceAgent(agent,dt){const p=agent.person,speed=agent.speed||1.05;let remaining=speed*dt;while(remaining>0.0001&&agent.path&&agent.index<agent.path.length){const target=agent.path[agent.index],delta=target.clone().sub(p.root.position);const dist=delta.length();if(dist<.025){p.root.position.copy(target);agent.index++;continue;}const step=Math.min(remaining,dist);delta.normalize();const candidate=p.root.position.clone().addScaledVector(delta,step);if(!patrolSegmentIsClear(p.root.position,candidate)){p.armL.rotation.x=p.armR.rotation.x=0;return false;}p.root.position.copy(candidate);setWalkPose(p,delta,agent.phase||0);remaining-=step;}return !!(agent.path&&agent.index>=agent.path.length);}
 function makePatrolAgent(person,route,home,side,phase,homeDistance=null){const metrics=routeMetrics(route);return {person,route,metrics,home:new THREE.Vector3(home.x,0,home.z),side,phase,homeDistance,mode:'station',distance:0,direction:1,speed:1.05,path:null,index:0,timer:0};}
-const patrolAgents=[makePatrolAgent(worker,leftPatrolRoute,{x:-11.2,z:4.0},-10.2,0),makePatrolAgent(worker2,rightPatrolRoute,{x:11.2,z:4.0},10.2,Math.PI),null];
+const patrolAgents=[makePatrolAgent(worker,leftPatrolRoute,{x:-11.2,z:4.0},-10.2,0),makePatrolAgent(worker2,rightPatrolRoute,{x:11.2,z:4.0},36.5,Math.PI),null];
 function beginPatrol(agent){const entry=new THREE.Vector3(agent.side,0,4.0);agent.path=[entry];agent.index=0;agent.distance=routeDistanceToSide(agent.route,agent.metrics,agent.side,4.0);agent.mode='outbound';}
 function beginReturn(agent){if(agent.mode==='outbound'){agent.path=[agent.home];agent.index=0;agent.mode='homeward';return;}const targetDist=agent.homeDistance!==null?agent.homeDistance:routeDistanceToSide(agent.route,agent.metrics,agent.side,4.0);const forward=(targetDist-agent.distance+agent.metrics.total)%agent.metrics.total;const backward=(agent.distance-targetDist+agent.metrics.total)%agent.metrics.total;agent.direction=forward<=backward?1:-1;agent.returnTarget=targetDist;agent.mode='returnLoop';agent.path=null;agent.index=0;}
 function pClone(v){return new THREE.Vector3(v.x,0,v.z);}
-function updatePatrolAgent(agent,dt){const p=agent.person;if(agent.mode==='outbound'){if(advanceAgent(agent,dt)){agent.mode='patrol';agent.distance=routeDistanceToSide(agent.route,agent.metrics,agent.side,4.0);}}else if(agent.mode==='patrol'){agent.distance=(agent.distance+agent.speed*dt)%agent.metrics.total;const here=routePoint(agent.route,agent.metrics,agent.distance),next=routePoint(agent.route,agent.metrics,agent.distance+.12).point,dir=next.sub(here.point);p.root.position.copy(here.point);setWalkPose(p,dir,agent.phase);}else if(agent.mode==='returnLoop'){const diff=agent.direction>0?(agent.returnTarget-agent.distance+agent.metrics.total)%agent.metrics.total:(agent.distance-agent.returnTarget+agent.metrics.total)%agent.metrics.total;const step=Math.min(diff,agent.speed*dt);agent.distance=(agent.distance+agent.direction*step+agent.metrics.total)%agent.metrics.total;const here=routePoint(agent.route,agent.metrics,agent.distance),next=routePoint(agent.route,agent.metrics,agent.distance+agent.direction*.12).point,dir=next.sub(here.point);p.root.position.copy(here.point);setWalkPose(p,dir,agent.phase);if(diff<=step+.001){const entry=routePoint(agent.route,agent.metrics,agent.returnTarget).point;agent.path=[agent.home];agent.index=0;agent.mode='homeward';}}else if(agent.mode==='homeward'){if(advanceAgent(agent,dt)){agent.mode='station';p.root.rotation.y=Math.PI;p.armL.rotation.x=p.armR.rotation.x=p.legL.rotation.x=p.legR.rotation.x=0;}}}
+function updatePatrolAgent(agent,dt){
+ const p=agent.person;
+ if(agent.mode==='outbound'){
+  if(advanceAgent(agent,dt)){agent.mode='patrol';agent.distance=routeDistanceToSide(agent.route,agent.metrics,agent.side,4.0);}
+ }else if(agent.mode==='patrol'){
+  const nextDistance=(agent.distance+agent.speed*dt)%agent.metrics.total;
+  const here=routePoint(agent.route,agent.metrics,agent.distance),next=routePoint(agent.route,agent.metrics,nextDistance);
+  if(patrolSegmentIsClear(p.root.position,next.point)){
+   agent.distance=nextDistance;
+   const look=routePoint(agent.route,agent.metrics,agent.distance+.12).point,dir=look.sub(next.point);
+   p.root.position.copy(next.point);setWalkPose(p,dir,agent.phase);
+  }else{p.armL.rotation.x=p.armR.rotation.x=0;}
+ }else if(agent.mode==='returnLoop'){
+  const diff=agent.direction>0?(agent.returnTarget-agent.distance+agent.metrics.total)%agent.metrics.total:(agent.distance-agent.returnTarget+agent.metrics.total)%agent.metrics.total;
+  const step=Math.min(diff,agent.speed*dt),nextDistance=(agent.distance+agent.direction*step+agent.metrics.total)%agent.metrics.total;
+  const here=routePoint(agent.route,agent.metrics,agent.distance),next=routePoint(agent.route,agent.metrics,nextDistance);
+  if(patrolSegmentIsClear(p.root.position,next.point)){
+   agent.distance=nextDistance;
+   const look=routePoint(agent.route,agent.metrics,agent.distance+agent.direction*.12).point,dir=look.sub(next.point);
+   p.root.position.copy(next.point);setWalkPose(p,dir,agent.phase);
+   if(diff<=step+.001){agent.path=[agent.home];agent.index=0;agent.mode='homeward';}
+  }else{p.armL.rotation.x=p.armR.rotation.x=0;}
+ }else if(agent.mode==='homeward'){
+  if(advanceAgent(agent,dt)){agent.mode='station';p.root.rotation.y=Math.PI;p.armL.rotation.x=p.armR.rotation.x=p.legL.rotation.x=p.legR.rotation.x=0;}
+ }
+}
 window.addEventListener('twin-patrol-toggle',e=>{patrolEnabled=!!e.detail.enabled;for(const agent of patrolAgents){if(!agent)continue;if(patrolEnabled)beginPatrol(agent);else if(agent.mode!=='station')beginReturn(agent);}if(worker3){if(patrolEnabled)beginPatrol(patrolAgents[2]);else if(patrolAgents[2].mode!=='station')beginReturn(patrolAgents[2]);}document.getElementById('workerState').textContent=patrolEnabled?'三人设备巡检':'巡检人员返回工位';});
 const sparkCount=90,sparkPositions=new Float32Array(sparkCount*3),sparkGeo=new THREE.BufferGeometry();sparkGeo.setAttribute('position',new THREE.BufferAttribute(sparkPositions,3));const sparks=new THREE.Points(sparkGeo,new THREE.PointsMaterial({color:0xffb34d,size:.075,transparent:true,opacity:.9}));scene.add(sparks);
 function burstSparks(){for(let i=0;i<sparkCount;i++){sparkPositions[i*3]=7+(Math.random()-.5)*.8;sparkPositions[i*3+1]=1.5+Math.random()*.5;sparkPositions[i*3+2]=4+(Math.random()-.5)*.8;}sparkGeo.attributes.position.needsUpdate=true;}
@@ -888,10 +929,26 @@ function makeWorkstation(x,z,label){const g=new THREE.Group();g.position.set(x,0
 makeWorkstation(11.2,2.0,'A01 操作台');makeWorkstation(-11.2,1.9,'视觉检测操作台');
 // 产线02操作员初始站立在电脑桌旁；启动巡检后沿产线外围路线巡检。
 const line2DeskX=33,line2DeskZ=1.3;
-const line2WorkerStandZ=line2DeskZ+1.05;
+const line2WorkerStandZ=line2DeskZ+1.80;
 worker3=makeWorker(line2DeskX,line2WorkerStandZ);worker3.root.rotation.y=Math.PI;
 // 返回目标为电脑工位旁的站立点；巡检关闭后沿通道返回并保持站立。
-patrolAgents[2]=makePatrolAgent(worker3,line2PatrolRoute,{x:line2DeskX,z:line2WorkerStandZ},36.0,Math.PI*.5,0);
+patrolAgents[2]=makePatrolAgent(worker3,line2PatrolRoute,{x:line2DeskX,z:line2WorkerStandZ},35.5,Math.PI*.5,0);
+// 工人碰撞安全区：所有障碍物在实际外形尺寸上增加安全余量，按人物中心点进行连续线段采样。
+// 机床、传送带、电脑桌均作为不可穿越区域；巡检路线与返回路线都经过同一套检查。
+const patrolObstacleBoxes=[];
+function addPatrolObstacle(cx,cz,hx,hz,margin=.34){patrolObstacleBoxes.push({minX:cx-hx-margin,maxX:cx+hx+margin,minZ:cz-hz-margin,maxZ:cz+hz+margin});}
+// 主产线五台机床（保留设备自身真实占地尺寸）
+for(const m of machines)addPatrolObstacle(m.position.x,m.position.z,2.18,1.62,.34);
+// 主传送带及两侧护栏
+addPatrolObstacle(BELT_X,BELT_Z,BELT_LENGTH/2,.90,.32);
+// 两台主产线电脑工作台
+addPatrolObstacle(11.2,2.0,1.05,.62,.34);
+addPatrolObstacle(-11.2,1.9,1.05,.62,.34);
+// 产线02四台五轴机床：父组坐标(23,-1) + 子机床局部坐标
+for(const localX of [-8,-2.7,2.6,7.9])addPatrolObstacle(23+localX,-1-3.15,1.92,1.58,.36);
+// 产线02中央传送带与大型 CNC 操作台
+addPatrolObstacle(23,-1,11.5,.78,.38);
+addPatrolObstacle(line2DeskX,line2DeskZ,1.40,.90,.38);
 box(scene,0,.35,-8.1,29,.22,.38,ductMat);for(let x=-14;x<=14;x+=2)box(scene,x,.48,-8.1,.045,.08,.42,steel,false);
 // 设备状态灯
 const lamps=[];
