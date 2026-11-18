@@ -112,9 +112,10 @@ background:rgba(3,35,44,.94);border:1px solid #16d9df;box-shadow:0 0 20px #087b8
 <div class="topbar">
   <div class="brand">智能工厂数字孪生平台<small>INTELLIGENT FACTORY DIGITAL TWIN PLATFORM</small></div>
   <div class="top-actions">
-    <button class="top-btn active" id="autoBtn" onclick="toggleAuto()">自动监测</button>
+    <button class="top-btn" id="autoBtn" onclick="toggleAuto()">自动检测</button>
+    <button class="top-btn" id="feedBtn" onclick="toggleFeed()">物件检测</button>
     <button class="top-btn" onclick="openPanel('monitor')">数据监测</button>
-    <button class="top-btn" onclick="openPanel('inspect')">设备巡检</button>
+    <button class="top-btn" id="patrolBtn" onclick="togglePatrol()">设备巡检</button>
     <button class="top-btn" onclick="resetCameraView()">视角复位</button>
     <div class="clock" id="clock"></div>
   </div>
@@ -143,7 +144,7 @@ background:rgba(3,35,44,.94);border:1px solid #16d9df;box-shadow:0 0 20px #087b8
   <div class="bar-row"><span>运行时间</span><div class="bar"><i style="width:86%"></i></div><b>86%</b></div>
   <div class="bar-row"><span>加工进度</span><div class="bar"><i style="width:72%"></i></div><b>72%</b></div>
   <div class="bar-row"><span>健康指数</span><div class="bar"><i style="width:96%"></i></div><b>96%</b></div>
-  <div class="section-label">机械臂 / 工人协同状态</div><div class="device"><span><i class="dot warn" id="robotDot"></i>机械臂 C03</span><b class="status warn" id="robotState">待机</b></div><div class="device"><span><i class="dot"></i>现场工人 W01</span><b class="status" id="workerState">工位监控</b></div><div class="section-label">视觉检测摄像头</div>
+  <div class="section-label">机械臂 / 工人协同状态</div><div class="device"><span><i class="dot warn" id="robotDot"></i>机械臂 C03</span><b class="status warn" id="robotState">待机</b></div><div class="device"><span><i class="dot"></i>现场工人 W01</span><b class="status" id="workerState">待命</b></div><div class="section-label">视觉检测摄像头</div>
   <div class="device" id="cameraStatus"><span><i class="dot"></i>传送带工业相机 CAM-01</span><b class="status" id="camState">在线</b></div>
   <div class="metric-grid">
     <div class="metric"><label>检测状态</label><strong id="detectState" style="font-size:15px">待检测</strong></div>
@@ -532,16 +533,42 @@ function makeReferencePart(){
 
  return part;
 }
-// 8件缩小后的工件，沿传送带上料端均匀排列
+// 预制工件池初始全部隐藏；只有点击“物件检测”才逐件上料
 for(let i=0;i<8;i++){
  const group=makeReferencePart();
- // 工件中心间距扩大到3.0，减少金属件边缘接触和穿模
- group.position.set(10.0-i*3.0,1.00,BELT_Z);
+ group.position.set(10.0,1.00,BELT_Z);
  group.scale.set(.58,.58,.58);
+ group.visible=false;
  scene.add(group);
- group.userData={index:i,offset:i*3.0,state:'moving',bad:i===5||i===6,missing:i===5,classified:false};
+ group.userData={index:i,state:'waitingSpawn',bad:i===4||i===7,missing:i===4,classified:false,spawned:false};
  workpieces.push(group);
 }
+let materialFeedEnabled=false,autoDetectionEnabled=false,feedSpawnTimer=0,spawnCursor=0;
+const FEED_INTERVAL=3.0;
+function spawnNextPart(){
+ if(!materialFeedEnabled)return false;
+ let part=null;
+ // 优先按工件编号顺序取可用件，确保每次只从入口放入一件
+ for(let k=0;k<workpieces.length;k++){
+  const idx=(spawnCursor+k)%workpieces.length, candidate=workpieces[idx];
+  if(!candidate.visible && candidate.userData.state==='waitingSpawn'){part=candidate;spawnCursor=(idx+1)%workpieces.length;break;}
+ }
+ if(!part)return false;
+ part.position.set(10.0,1.00,BELT_Z);part.visible=true;
+ part.userData.state='moving';part.userData.classified=false;part.userData.pickT=0;part.userData.storedT=0;
+ part.userData.spawned=true;
+ logSort('<span style="color:#48e8ed">上料：工件 #'+(part.userData.index+1)+' 已进入传送带</span>');
+ return true;
+}
+window.addEventListener('twin-feed-toggle',e=>{
+ materialFeedEnabled=!!e.detail.enabled;feedSpawnTimer=0;
+ if(materialFeedEnabled)spawnNextPart();
+});
+window.addEventListener('twin-auto-toggle',e=>{
+ autoDetectionEnabled=!!e.detail.enabled;
+ detectBeam.intensity=autoDetectionEnabled?5:0;
+ lensGlass.material.emissive?.setHex(autoDetectionEnabled?0x087c9a:0x000000);
+});
 // 工业相机改为传送带侧装：位于传送带前侧，镜头水平朝向检测区域
 // 这样不会挡住工件和机械臂，也能清楚看到相机与检测区域的对应关系
 const cameraRig=new THREE.Group();cameraRig.position.set(-1.2,2.65,5.75);scene.add(cameraRig);
@@ -556,7 +583,7 @@ box(scene,-1.2,2.25,6.15,.16,.14,.92,steel);
 box(scene,-1.2,1.95,5.75,.72,.14,.72,dark);
 const detectFrame=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(3.2,.05,1.55)),new THREE.LineBasicMaterial({color:0x14e8ee}));
 detectFrame.position.set(-1.2,1.20,BELT_Z);scene.add(detectFrame);
-const detectBeam=new THREE.SpotLight(0x00d9e8,5,5,Math.PI/5,.45,1.2);detectBeam.position.set(-1.2,2.55,6.32);detectBeam.target.position.set(-1.2,1.05,BELT_Z);scene.add(detectBeam);scene.add(detectBeam.target);
+const detectBeam=new THREE.SpotLight(0x00d9e8,0,5,Math.PI/5,.45,1.2);detectBeam.position.set(-1.2,2.55,6.32);detectBeam.target.position.set(-1.2,1.05,BELT_Z);scene.add(detectBeam);scene.add(detectBeam.target);
 // 旁侧废品收集区，放在机械臂后侧并留出抓取空间
 const rejectBin=new THREE.Group();rejectBin.position.set(-1.1,0,11.75);scene.add(rejectBin);
 box(rejectBin,0,.48,0,2.2,.95,1.75,mat(0x57232a,.35,.5));
@@ -657,19 +684,72 @@ function makeFiveAxisMachine(parent,x,label){
 for(let i=0;i<4;i++)makeFiveAxisMachine(secondaryLine,-8+i*5.3,'五轴联动加工中心 '+String(i+1).padStart(2,'0'));
 box(secondaryLine,8,1.35,-.4,.7,2.5,.7,yellow);box(secondaryLine,10,.65,2.3,2.0,1.3,1.7,mat(0x632a2d,.35,.6));for(let i=0;i<10;i++)box(secondaryLine,-10+i*2.15,.93,0,.10,.10,1.65,steel,false);
 const moduleSignCanvas=document.createElement('canvas');moduleSignCanvas.width=512;moduleSignCanvas.height=128;const moduleSignCtx=moduleSignCanvas.getContext('2d');moduleSignCtx.fillStyle='#09232b';moduleSignCtx.fillRect(0,0,512,128);moduleSignCtx.strokeStyle='#21d8df';moduleSignCtx.lineWidth=5;moduleSignCtx.strokeRect(4,4,504,120);moduleSignCtx.fillStyle='#c9ffff';moduleSignCtx.font='bold 38px Microsoft YaHei';moduleSignCtx.textAlign='center';moduleSignCtx.fillText('产线 02 · 五轴联动加工模块',256,78);const moduleSign=new THREE.Mesh(new THREE.PlaneGeometry(5.8,1.1),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(moduleSignCanvas),transparent:true,side:THREE.DoubleSide}));moduleSign.position.set(0,4.15,-4.8);secondaryLine.add(moduleSign);
-// 坐姿操作员：安全帽、工装、椅子、键盘和监控屏，双手自然放在键盘附近
-function makeWorker(){const g=new THREE.Group();g.position.set(9.5,0,4.45);secondaryLine.add(g);const suit=mat(0x285b72,.25,.72),helmet=mat(0xf0b72d,.18,.48),skin=mat(0xc68f70,.05,.8),boot=mat(0x202a2e,.2,.8);
- box(g,0,1.30,0,.58,.72,.38,suit);const head=new THREE.Mesh(new THREE.SphereGeometry(.19,20,14),skin);head.position.set(0,1.91,-.10);g.add(head);const hat=new THREE.Mesh(new THREE.SphereGeometry(.22,20,10,0,Math.PI*2,0,Math.PI/2),helmet);hat.position.set(0,2.07,-.10);g.add(hat);box(g,0,2.00,-.10,.48,.05,.36,helmet);
- // 坐姿大腿向前、小腿垂直，双脚落地
- box(g,-.17,.83,-.28,.25,.20,.68,suit);box(g,.17,.83,-.28,.25,.20,.68,suit);box(g,-.17,.42,-.02,.18,.58,.18,suit);box(g,.17,.42,-.02,.18,.58,.18,suit);box(g,-.17,.12,-.18,.25,.12,.38,boot);box(g,.17,.12,-.18,.25,.12,.38,boot);
- const armL=box(g,-.38,1.42,-.18,.15,.48,.16,suit),armR=box(g,.38,1.42,-.18,.15,.48,.16,suit);armL.rotation.x=-.75;armR.rotation.x=-.75;
- // 工作椅与靠背
- box(g,0,.72,.42,.78,.14,.72,dark);box(g,0,1.15,.72,.72,.78,.14,suit);box(g,0,.38,.42,.12,.58,.12,steel);for(let a=0;a<4;a++){const ang=a*Math.PI/2;box(g,Math.cos(ang)*.34,.08,.42+Math.sin(ang)*.34,.10,.12,.10,steel);}
- // 操作台、键盘、鼠标和屏幕（面向操作员）
- box(g,0,1.18,-1.08,2.25,.14,.82,steel);box(g,0,1.29,-1.23,.72,.035,.28,dark);box(g,.55,1.29,-1.23,.13,.035,.20,dark);
- box(g,0,1.92,-1.42,1.12,.72,.12,dark);box(g,0,1.94,-1.345,.98,.55,.025,mat(0x0b3440,.2,.18),false);box(g,0,1.56,-1.42, .18,.06,.18,steel);
- return {root:g,head,armL,armR,legL:{rotation:{x:0}},legR:{rotation:{x:0}}};}
-const worker=makeWorker();let workerMode='station',workerTimer=0,patrolTarget=0,screenRefresh=-1;
+// 两名车间巡检工人：白色安全帽、藏青工装、银灰反光条与完整四肢
+function makeWorker(x=0,z=0){
+ const g=new THREE.Group();g.position.set(x,0,z);scene.add(g);
+ const suit=mat(0x142d48,.18,.72),pants=mat(0x172d43,.16,.78),helmet=mat(0xf1f4f2,.12,.34),skin=mat(0xc58e70,.04,.82),boot=mat(0x111b23,.28,.7),reflect=mat(0xc5d3d1,.45,.32),yellowTrim=mat(0xe0b64b,.28,.52);
+ const torso=box(g,0,1.23,0,.56,.72,.34,suit);
+ // 胸前拉链、口袋和肩部反光带
+ box(g,0,1.25,.176,.035,.52,.012,reflect,false);
+ box(g,-.17,1.38,.181,.17,.16,.018,mat(0x203d59,.2,.7),false);
+ box(g,.17,1.38,.181,.17,.16,.018,mat(0x203d59,.2,.7),false);
+ for(const y of [1.02,1.58]){
+  box(g,0,y,.177,.59,.055,.018,reflect,false);
+ }
+ // 头颈与白色安全帽（帽檐、帽壳、顶部加强筋）
+ const neck=new THREE.Mesh(new THREE.CylinderGeometry(.075,.085,.13,16),skin);neck.position.set(0,1.66,0);g.add(neck);
+ const head=new THREE.Mesh(new THREE.SphereGeometry(.17,22,16),skin);head.position.set(0,1.86,-.015);g.add(head);
+ const hat=new THREE.Mesh(new THREE.SphereGeometry(.205,24,14,0,Math.PI*2,0,Math.PI/2),helmet);hat.position.set(0,2.00,-.015);g.add(hat);
+ const brim=new THREE.Mesh(new THREE.CylinderGeometry(.235,.235,.035,32),helmet);brim.position.set(0,1.99,-.015);g.add(brim);
+ box(g,0,2.10,-.015,.045,.045,.26,reflect,false);
+ // 双臂采用独立上臂、前臂和手掌，行走时自然摆动
+ const armL=new THREE.Group();armL.position.set(-.34,1.48,0);g.add(armL);
+ const armR=new THREE.Group();armR.position.set(.34,1.48,0);g.add(armR);
+ for(const [arm,side] of [[armL,-1],[armR,1]]){
+  box(arm,0,-.19,0,.16,.40,.17,suit);
+  box(arm,0,-.44,.015,.135,.34,.14,suit);
+  box(arm,0,-.31,.088,.145,.045,.018,reflect,false);
+  const hand=new THREE.Mesh(new THREE.SphereGeometry(.075,14,10),skin);hand.position.set(0,-.62,.015);arm.add(hand);
+ }
+ // 腰部与分腿结构、裤腿膝部反光条、工装鞋
+ box(g,0,.80,0,.48,.22,.30,pants);
+ const legL=new THREE.Group();legL.position.set(-.15,.75,0);g.add(legL);
+ const legR=new THREE.Group();legR.position.set(.15,.75,0);g.add(legR);
+ for(const leg of [legL,legR]){
+  box(leg,0,-.25,0,.19,.48,.22,pants);
+  box(leg,0,-.48,.015,.17,.40,.19,pants);
+  box(leg,0,-.34,.12,.18,.045,.018,reflect,false);
+  box(leg,0,-.68,.09,.25,.14,.38,boot);
+ }
+ // 简洁工牌与腰间工具袋
+ box(g,-.22,1.18,.19,.12,.16,.025,reflect,false);
+ box(g,.29,.86,.02,.16,.19,.20,mat(0x263d50,.2,.7));
+ return {root:g,head,armL,armR,legL,legR};
+}
+const worker=makeWorker(-8.8,1.2),worker2=makeWorker(-5.2,6.8);
+let workerMode='station',workerTimer=0,patrolTarget=0,screenRefresh=-1,patrolEnabled=false;
+// 巡检路线沿 A01 机床外围闭环布置，两名工人错峰行走，避免重叠
+const patrolRoute=[new THREE.Vector3(-10.0,0,1.1),new THREE.Vector3(-4.0,0,1.1),new THREE.Vector3(-4.0,0,7.0),new THREE.Vector3(-10.0,0,7.0)];
+function updatePatrolPerson(person,phase,dt){
+ if(!patrolEnabled)return;
+ const speed=.72,routeLen=6.0,edge=5.9;
+ let d=(performance.now()*.001*speed+phase)%(2*(routeLen+edge));
+ let a,b,k;
+ if(d<routeLen){a=patrolRoute[0];b=patrolRoute[1];k=d/routeLen;}
+ else if((d-=routeLen)<edge){a=patrolRoute[1];b=patrolRoute[2];k=d/edge;}
+ else if((d-=edge)<routeLen){a=patrolRoute[2];b=patrolRoute[3];k=d/routeLen;}
+ else{d-=routeLen;a=patrolRoute[3];b=patrolRoute[0];k=d/edge;}
+ person.root.position.lerpVectors(a,b,k);
+ const dir=new THREE.Vector3().subVectors(b,a);person.root.rotation.y=Math.atan2(dir.x,dir.z);
+ const swing=Math.sin(performance.now()*.006+phase)*.42;
+ person.armL.rotation.x=swing;person.armR.rotation.x=-swing;
+ person.legL.rotation.x=-swing*.72;person.legR.rotation.x=swing*.72;
+}
+window.addEventListener('twin-patrol-toggle',e=>{
+ patrolEnabled=!!e.detail.enabled;
+ if(patrolEnabled){workerMode='patrol';document.getElementById('workerState').textContent='双人巡检';}
+ else{workerMode='station';worker.armL.rotation.x=worker.armR.rotation.x=0;worker.legL.rotation.x=worker.legR.rotation.x=0;worker2.armL.rotation.x=worker2.armR.rotation.x=0;worker2.legL.rotation.x=worker2.legR.rotation.x=0;document.getElementById('workerState').textContent='待命';}
+});
 const sparkCount=90,sparkPositions=new Float32Array(sparkCount*3),sparkGeo=new THREE.BufferGeometry();sparkGeo.setAttribute('position',new THREE.BufferAttribute(sparkPositions,3));const sparks=new THREE.Points(sparkGeo,new THREE.PointsMaterial({color:0xffb34d,size:.075,transparent:true,opacity:.9}));scene.add(sparks);
 function burstSparks(){for(let i=0;i<sparkCount;i++){sparkPositions[i*3]=7+(Math.random()-.5)*.8;sparkPositions[i*3+1]=1.5+Math.random()*.5;sparkPositions[i*3+2]=4+(Math.random()-.5)*.8;}sparkGeo.attributes.position.needsUpdate=true;}
 
@@ -685,22 +765,9 @@ function logSort(message){const el=document.getElementById('sortLog');if(el)el.i
 
 // 工件补料安全检查：入口有足够空位才重新出现，避免重生时与其他工件重叠
 function tryRespawnPart(part){
- const spawnX=10.0;
- for(const other of workpieces){
-  if(other===part || !other.visible)continue;
-  if(other.userData.state==='stored' || other.userData.state==='waitingSpawn')continue;
-  if(Math.abs(other.position.x-spawnX)<3.0 &&
-     Math.abs(other.position.z-BELT_Z)<.45){
-   return false;
-  }
- }
- part.position.set(spawnX,1.02,BELT_Z);
- part.visible=true;
+ part.visible=false;
+ part.userData.state='waitingSpawn';
  part.userData.classified=false;
- part.userData.state='moving';
- part.userData.bad=Math.random()<.30;
- part.userData.missing=part.userData.bad&&Math.random()<.5;
- part.userData.pickT=0;
  part.userData.storedT=0;
  return true;
 }
@@ -815,66 +882,46 @@ function animate(){
   }
   robot.wrist.rotation.x=-.10;
   if(q>=1){p.visible=false;p.userData.state='stored';p.userData.storedT=0;rejectStored++;activePick=null;robot.shoulder.rotation.x=0;robot.elbow.rotation.x=0;robot.wrist.rotation.x=0;robot.fingerL.position.x=-.19;robot.fingerR.position.x=.19;logSort('<span style="color:#ff7777">缺陷件已投入旁侧废品箱</span>');const rs=document.getElementById('robotState');if(rs)rs.textContent='复位中';setTimeout(()=>{if(rs)rs.textContent='待机';},650);const rd=document.getElementById('robotDot');if(rd)rd.className='dot';updateProductionBoard();}
- }else{robot.shoulder.rotation.x=Math.sin(t*1.2)*.035;robot.elbow.rotation.x=.10+Math.sin(t*1.2+1)*.025;robot.wrist.rotation.x=Math.sin(t*.9)*.025;}
+ }else if(autoDetectionEnabled){robot.shoulder.rotation.x=Math.sin(t*1.2)*.035;robot.elbow.rotation.x=.10+Math.sin(t*1.2+1)*.025;robot.wrist.rotation.x=Math.sin(t*.9)*.025;}else{robot.shoulder.rotation.x=0;robot.elbow.rotation.x=0;robot.wrist.rotation.x=0;}
  // 主轴旋转及告警灯与实时转速/温度联动；机床观察门保持固定关闭
  const tele=window.twinTelemetry||{rpm:3200,temp:36.5};
  machineDynamics.forEach(d=>{d.spindle.rotation.y+=Math.max(.008,(tele.rpm||3200)/3200*.045);const hot=(tele.temp||36.5)>36.9;d.beacon.material.color.setHex(hot?0xff5a35:0x27e5a0);d.beacon.material.emissive.setHex(hot?0x8a1808:0x087c45);});
  fiveAxisDynamics.forEach((d,i)=>{d.spindle.rotation.y+=Math.max(.008,(tele.rpm||3200)/3200*.04);d.trunnion.rotation.x=Math.sin(t*.42+i*.7)*.10;d.mag.rotation.x+=.0015;});
- // 坐姿操作员持续监控数控系统；机械臂分拣缺陷件时转头查看并轻抬右手
- if(workerMode==='inspectReject'){worker.head.rotation.y=.48;worker.armR.rotation.z=-.18+Math.sin(t*5)*.045;worker.armL.rotation.z=.04;workerTimer+=.016;if(workerTimer>2.8){workerMode='station';workerTimer=0;worker.head.rotation.y=0;worker.armR.rotation.z=0;worker.armL.rotation.z=0;const ws=document.getElementById('workerState');if(ws)ws.textContent='工位监控';}}
- else{worker.head.rotation.y=Math.sin(t*.45)*.035;worker.armR.rotation.z=Math.sin(t*1.8)*.018;worker.armL.rotation.z=-Math.sin(t*1.8)*.018;}
+ // 双人巡检沿机床外围持续行走；缺陷分拣时第一名工人短暂转头关注
+ if(workerMode==='inspectReject'){worker.head.rotation.y=.48;worker.armR.rotation.x=-.25+Math.sin(t*5)*.045;workerTimer+=.016;if(workerTimer>2.8){workerMode=patrolEnabled?'patrol':'station';workerTimer=0;worker.head.rotation.y=0;}}
+ if(patrolEnabled){updatePatrolPerson(worker,0,1/60);updatePatrolPerson(worker2,Math.PI*5,1/60);}
  if(Math.floor(t*2)%7===0&&Math.random()<.035)burstSparks();
  // 远距离自动降低第二模块细节负载（LOD）
  secondaryLine.visible=camera.position.distanceTo(secondaryLine.position)<58;
- beltRollers.forEach(roller=>{roller.rotation.x-=.045;});
+ // 传送带只有在点击“物件检测”后才逐件上料并运行
+ if(materialFeedEnabled){
+  feedSpawnTimer+=1/60;
+  if(feedSpawnTimer>=FEED_INTERVAL){feedSpawnTimer=0;spawnNextPart();}
+  beltRollers.forEach(roller=>{roller.rotation.x-=.045;});
+ }
  workpieces.forEach(part=>{
-  // 分拣完成的工件短暂进入废品箱后，模拟新工件补料，重新回到传送带入口
-  if(part.userData.state==='stored'){
-   part.userData.storedT=(part.userData.storedT||0)+.016;
-   if(part.userData.storedT>1.35){
-    part.userData.state='waitingSpawn';
-    part.visible=false;
-    tryRespawnPart(part);
-   }
-   return;
-  }
-  if(part.userData.state==='waitingSpawn'){
-   tryRespawnPart(part);
-   return;
-  }
+  if(!part.visible)return;
   if(part.userData.state==='rejecting')return;
   if(part.userData.state==='queued'){
-   if(!activePick){part.userData.state='moving';classifyPart(part);}
+   if(!activePick&&autoDetectionEnabled){part.userData.state='moving';classifyPart(part);}
    return;
   }
   if(part.userData.state==='moving'||part.userData.state==='passed'){
-   // 防追尾：运动方向为-X，前方工件不足3.0间距时暂停当前工件
    let blockedByPart=false;
    for(const other of workpieces){
-    if(other===part || !other.visible)continue;
-    if(other.userData.state==='stored' || other.userData.state==='waitingSpawn')continue;
+    if(other===part||!other.visible)continue;
     const gap=part.position.x-other.position.x;
-    if(gap>0 && gap<3.0 &&
-       Math.abs(part.position.z-other.position.z)<.45){
-     blockedByPart=true;
-     break;
-    }
+    if(gap>0&&gap<2.7&&Math.abs(part.position.z-other.position.z)<.45){blockedByPart=true;break;}
    }
-   if(!blockedByPart)part.position.x-=.012;
-
-   if(!part.userData.classified&&part.position.x<=-1.1){
+   if(materialFeedEnabled&&!blockedByPart)part.position.x-=.018;
+   if(autoDetectionEnabled&&!part.userData.classified&&part.position.x<=-1.1){
     if(activePick&&part.userData.bad){part.position.x=-1.1;part.userData.state='queued';}
     else classifyPart(part);
    }
-   // 到达传送带左端后等待入口空位，再安全循环补料
-   if(part.position.x<BELT_LEFT+.25){
-    part.userData.state='waitingSpawn';
-    part.visible=false;
-    tryRespawnPart(part);
-   }
+   if(part.position.x<BELT_LEFT+.25)tryRespawnPart(part);
   }
  });
- detectFrame.material.opacity=.55+.45*Math.sin(t*3);detectFrame.material.transparent=true;detectBeam.intensity=4+1.5*Math.sin(t*4);
+ detectFrame.material.opacity=autoDetectionEnabled?(.55+.45*Math.sin(t*3)):.10;detectFrame.material.transparent=true;detectBeam.intensity=autoDetectionEnabled?(4+1.5*Math.sin(t*4)):0;
  controls.update();renderer.render(scene,camera);
 }
 animate();
@@ -885,7 +932,7 @@ addEventListener('resize',()=>{
 </script>
 
 <script>
-let auto=true;
+let auto=false,feedOn=false,patrolOn=false;
 function updateClock(){
  const d=new Date();
  document.getElementById('clock').textContent=d.toLocaleDateString('zh-CN')+' '+d.toLocaleTimeString('zh-CN',{hour12:false});
@@ -894,9 +941,21 @@ updateClock();setInterval(updateClock,1000);window.twinTelemetry={rpm:3200,temp:
 function toggleAuto(){
  auto=!auto;
  const b=document.getElementById('autoBtn');
- b.classList.toggle('active',auto);
- b.textContent=auto?'自动监测':'暂停监测';
- showToast(auto?'已开启自动监测':'已暂停自动监测');
+ b.classList.toggle('active',auto);b.textContent=auto?'自动检测':'自动检测';
+ window.dispatchEvent(new CustomEvent('twin-auto-toggle',{detail:{enabled:auto}}));
+ showToast(auto?'自动检测已启动：相机与机械臂开始工作':'自动检测已停止：相机与机械臂待机');
+}
+function toggleFeed(){
+ feedOn=!feedOn;const b=document.getElementById('feedBtn');
+ b.classList.toggle('active',feedOn);b.textContent=feedOn?'停止上料':'物件检测';
+ window.dispatchEvent(new CustomEvent('twin-feed-toggle',{detail:{enabled:feedOn}}));
+ showToast(feedOn?'物件检测已启动：工件将逐件进入传送带':'已停止后续工件上料');
+}
+function togglePatrol(){
+ patrolOn=!patrolOn;const b=document.getElementById('patrolBtn');
+ b.classList.toggle('active',patrolOn);
+ window.dispatchEvent(new CustomEvent('twin-patrol-toggle',{detail:{enabled:patrolOn}}));
+ showToast(patrolOn?'双人设备巡检已启动':'设备巡检已暂停');
 }
 function selectDevice(el,name){
  document.querySelectorAll('.device').forEach(x=>x.classList.remove('selected'));
@@ -917,15 +976,14 @@ function openPanel(type){
   body.innerHTML='<p>主轴转速：'+document.getElementById('rpm').textContent+' rpm</p><p>主轴负载：'+document.getElementById('load').textContent+'%</p><p>设备温度：'+document.getElementById('temp').textContent+' ℃</p><p>视觉相机：CAM-01 在线</p><p>检测结果为演示数据；接入 ONNX 模型后显示真实识别类别与置信度。</p>';
  }else if(type==='inspect'){
   title.textContent='设备巡检任务';
-  body.innerHTML='<p>巡检对象：A01 数控加工中心、CAM-01 工业相机、传送带 D04、机械臂 C03、工人 W01</p><p>巡检项目：设备在线状态、温度、运行负载、相机画面、输送线运行情况、废品箱容量。</p><p>检测画面：CAM-01 当前工件帧（演示数据）</p><p>分拣日志：'+document.getElementById('sortLog').innerText+'</p><p id="inspectResult">待执行巡检。</p><button class="action" onclick="runInspection()">开始巡检</button>';
+  body.innerHTML='<p>巡检对象：A01 数控加工中心、CAM-01 工业相机、传送带 D04、机械臂 C03、工人 W01</p><p>巡检项目：设备在线状态、温度、运行负载、相机画面、输送线运行情况、废品箱容量。</p><p>检测画面：CAM-01 当前工件帧（演示数据）</p><p>分拣日志：'+document.getElementById('sortLog').innerText+'</p><p id="inspectResult">巡检人员：2 名工人待命。点击开始巡检后，两名巡检工人将沿机床外围路线行走。</p><button class="action" onclick="togglePatrol()">开始 / 停止双人巡检</button>';
  }else if(type==='device'){
   // 设备详情内容已由 selectDevice 填充
  }
  mask.classList.add('show');
 }
 function runInspection(){
- document.getElementById('inspectResult').textContent='巡检完成：演示环境下设备状态正常，相机在线，输送线运行中。';
- showToast('设备巡检已完成');
+ togglePatrol();const result=document.getElementById('inspectResult');if(result)result.textContent=patrolOn?'两名巡检工人正在沿机床外围巡检。':'巡检已暂停，两名工人返回待命状态。';
 }
 function closePanel(e){if(!e||e.target.id==='modalMask')document.getElementById('modalMask').classList.remove('show');}
 function resetCameraView(){window.dispatchEvent(new Event('reset-twin-camera'));showToast('3D视角已复位');}
