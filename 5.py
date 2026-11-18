@@ -112,9 +112,10 @@ background:rgba(3,35,44,.94);border:1px solid #16d9df;box-shadow:0 0 20px #087b8
 <div class="topbar">
   <div class="brand">智能工厂数字孪生平台<small>INTELLIGENT FACTORY DIGITAL TWIN PLATFORM</small></div>
   <div class="top-actions">
-    <button class="top-btn active" id="autoBtn" onclick="toggleAuto()">自动监测</button>
+    <button class="top-btn" id="autoBtn" onclick="toggleAuto()">缺陷检测</button>
+    <button class="top-btn" id="feedBtn" onclick="toggleFeed()">零件检测</button>
     <button class="top-btn" onclick="openPanel('monitor')">数据监测</button>
-    <button class="top-btn" onclick="openPanel('inspect')">设备巡检</button>
+    <button class="top-btn" id="patrolBtn" onclick="togglePatrol()">设备巡检</button>
     <button class="top-btn" onclick="resetCameraView()">视角复位</button>
     <div class="clock" id="clock"></div>
   </div>
@@ -143,7 +144,7 @@ background:rgba(3,35,44,.94);border:1px solid #16d9df;box-shadow:0 0 20px #087b8
   <div class="bar-row"><span>运行时间</span><div class="bar"><i style="width:86%"></i></div><b>86%</b></div>
   <div class="bar-row"><span>加工进度</span><div class="bar"><i style="width:72%"></i></div><b>72%</b></div>
   <div class="bar-row"><span>健康指数</span><div class="bar"><i style="width:96%"></i></div><b>96%</b></div>
-  <div class="section-label">机械臂 / 工人协同状态</div><div class="device"><span><i class="dot warn" id="robotDot"></i>机械臂 C03</span><b class="status warn" id="robotState">待机</b></div><div class="device"><span><i class="dot"></i>现场工人 W01</span><b class="status" id="workerState">工位监控</b></div><div class="section-label">视觉检测摄像头</div>
+  <div class="section-label">机械臂 / 工人协同状态</div><div class="device"><span><i class="dot warn" id="robotDot"></i>机械臂 C03</span><b class="status warn" id="robotState">待机</b></div><div class="device"><span><i class="dot"></i>现场工人 W01</span><b class="status" id="workerState">待命</b></div><div class="section-label">视觉检测摄像头</div>
   <div class="device" id="cameraStatus"><span><i class="dot"></i>传送带工业相机 CAM-01</span><b class="status" id="camState">在线</b></div>
   <div class="metric-grid">
     <div class="metric"><label>检测状态</label><strong id="detectState" style="font-size:15px">待检测</strong></div>
@@ -225,12 +226,12 @@ const blueLight=new THREE.PointLight(0x087bff,22,30);blueLight.position.set(8,5,
 
 const mat=(color,metalness=.25,roughness=.55,emissive=0x000000)=>new THREE.MeshStandardMaterial({color,metalness,roughness,emissive});
 const floorMat=new THREE.MeshStandardMaterial({color:0x555b5c,metalness:.04,roughness:.96});
-const floor=new THREE.Mesh(new THREE.PlaneGeometry(72,44),floorMat);
+const floor=new THREE.Mesh(new THREE.PlaneGeometry(80,44),floorMat);
 floor.rotation.x=-Math.PI/2;floor.position.y=-.08;floor.receiveShadow=true;scene.add(floor);
 const grid=new THREE.GridHelper(72,72,0x536365,0x414c4e);grid.position.y=-.045;scene.add(grid);
 // 水泥地面接缝、磨损污渍与黄色安全通道线
 const floorDetail=mat(0x777b78,.02,.98), stainMat=new THREE.MeshBasicMaterial({color:0x303638,transparent:true,opacity:.20});
-for(let z=-16;z<=16;z+=4) box(scene,0,-.025,z,68,.012,.025,floorDetail,false);
+for(let z=-16;z<=16;z+=4) box(scene,0,-.025,z,76,.012,.025,floorDetail,false);
 for(let x=-30;x<=30;x+=6) box(scene,x,-.024,0,.025,.012,40,floorDetail,false);
 const safetyYellow=new THREE.MeshStandardMaterial({color:0xe6b52b,roughness:.88});
 for(const z of [-14.8,12.9]) box(scene,0,-.012,z,65,.018,.12,safetyYellow,false);
@@ -308,7 +309,7 @@ function makeMachine(x,z,label){
 // 六台机床统一排成前后两排、每排三台，横向间距一致并以厂房中心线对齐
 const machines=[
  makeMachine(-7,4,'数控加工中心 A01'),
- makeMachine(0,4,'数控车床 B02'),
+ // 移除紧邻 CAM-01 的数控车床 B02，给工业相机留出清晰展示空间
  makeMachine(7,4,'精密检测工作站 E05'),
  makeMachine(-7,-5,'立式加工中心 F06'),
  makeMachine(0,-5,'高速钻攻中心 G07'),
@@ -532,16 +533,50 @@ function makeReferencePart(){
 
  return part;
 }
-// 8件缩小后的工件，沿传送带上料端均匀排列
+// 预制工件池初始全部隐藏；只有点击“零件检测”才逐件上料
 for(let i=0;i<8;i++){
  const group=makeReferencePart();
- // 工件中心间距扩大到3.0，减少金属件边缘接触和穿模
- group.position.set(10.0-i*3.0,1.00,BELT_Z);
+ group.position.set(10.0,1.00,BELT_Z);
  group.scale.set(.58,.58,.58);
+ group.visible=false;
  scene.add(group);
- group.userData={index:i,offset:i*3.0,state:'moving',bad:i===5||i===6,missing:i===5,classified:false};
+ group.userData={index:i,state:'waitingSpawn',bad:i===4||i===7,missing:i===4,classified:false,spawned:false};
  workpieces.push(group);
 }
+let materialFeedEnabled=false,autoDetectionEnabled=false,feedSpawnTimer=0,spawnCursor=0;
+// 零件检测由离传送带上料端最近的巡检人员负责；抵达站位后才允许开始上料。
+let feedAttendantAgent=null,feedAttendantReady=false;
+const FEED_INTERVAL=3.0;
+function spawnNextPart(){
+ if(!materialFeedEnabled)return false;
+ let part=null;
+ // 优先按工件编号顺序取可用件，确保每次只从入口放入一件
+ for(let k=0;k<workpieces.length;k++){
+  const idx=(spawnCursor+k)%workpieces.length, candidate=workpieces[idx];
+  if(!candidate.visible && candidate.userData.state==='waitingSpawn'){part=candidate;spawnCursor=(idx+1)%workpieces.length;break;}
+ }
+ if(!part)return false;
+ part.position.set(10.0,1.00,BELT_Z);part.visible=true;
+ part.userData.state='moving';part.userData.classified=false;part.userData.pickT=0;part.userData.storedT=0;
+ part.userData.spawned=true;
+ logSort('<span style="color:#48e8ed">上料：工件 #'+(part.userData.index+1)+' 已进入传送带</span>');
+ return true;
+}
+window.addEventListener('twin-feed-toggle',e=>{
+ materialFeedEnabled=!!e.detail.enabled;
+ feedSpawnTimer=0;
+ feedAttendantReady=false;
+ if(materialFeedEnabled){
+  if(feedAttendantAgent)beginFeedAttendant(feedAttendantAgent);
+ }else if(feedAttendantAgent){
+  beginFeedAttendantReturn(feedAttendantAgent);
+ }
+});
+window.addEventListener('twin-auto-toggle',e=>{
+ autoDetectionEnabled=!!e.detail.enabled;
+ detectBeam.intensity=autoDetectionEnabled?5:0;
+ lensGlass.material.emissive?.setHex(autoDetectionEnabled?0x087c9a:0x000000);
+});
 // 工业相机改为传送带侧装：位于传送带前侧，镜头水平朝向检测区域
 // 这样不会挡住工件和机械臂，也能清楚看到相机与检测区域的对应关系
 const cameraRig=new THREE.Group();cameraRig.position.set(-1.2,2.65,5.75);scene.add(cameraRig);
@@ -556,7 +591,7 @@ box(scene,-1.2,2.25,6.15,.16,.14,.92,steel);
 box(scene,-1.2,1.95,5.75,.72,.14,.72,dark);
 const detectFrame=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(3.2,.05,1.55)),new THREE.LineBasicMaterial({color:0x14e8ee}));
 detectFrame.position.set(-1.2,1.20,BELT_Z);scene.add(detectFrame);
-const detectBeam=new THREE.SpotLight(0x00d9e8,5,5,Math.PI/5,.45,1.2);detectBeam.position.set(-1.2,2.55,6.32);detectBeam.target.position.set(-1.2,1.05,BELT_Z);scene.add(detectBeam);scene.add(detectBeam.target);
+const detectBeam=new THREE.SpotLight(0x00d9e8,0,5,Math.PI/5,.45,1.2);detectBeam.position.set(-1.2,2.55,6.32);detectBeam.target.position.set(-1.2,1.05,BELT_Z);scene.add(detectBeam);scene.add(detectBeam.target);
 // 旁侧废品收集区，放在机械臂后侧并留出抓取空间
 const rejectBin=new THREE.Group();rejectBin.position.set(-1.1,0,11.75);scene.add(rejectBin);
 box(rejectBin,0,.48,0,2.2,.95,1.75,mat(0x57232a,.35,.5));
@@ -655,101 +690,1644 @@ function makeFiveAxisMachine(parent,x,label){
  fiveAxisDynamics.push({spindle,trunnion,mag});return g;
 }
 for(let i=0;i<4;i++)makeFiveAxisMachine(secondaryLine,-8+i*5.3,'五轴联动加工中心 '+String(i+1).padStart(2,'0'));
-box(secondaryLine,8,1.35,-.4,.7,2.5,.7,yellow);box(secondaryLine,10,.65,2.3,2.0,1.3,1.7,mat(0x632a2d,.35,.6));for(let i=0;i<10;i++)box(secondaryLine,-10+i*2.15,.93,0,.10,.10,1.65,steel,false);
-const moduleSignCanvas=document.createElement('canvas');moduleSignCanvas.width=512;moduleSignCanvas.height=128;const moduleSignCtx=moduleSignCanvas.getContext('2d');moduleSignCtx.fillStyle='#09232b';moduleSignCtx.fillRect(0,0,512,128);moduleSignCtx.strokeStyle='#21d8df';moduleSignCtx.lineWidth=5;moduleSignCtx.strokeRect(4,4,504,120);moduleSignCtx.fillStyle='#c9ffff';moduleSignCtx.font='bold 38px Microsoft YaHei';moduleSignCtx.textAlign='center';moduleSignCtx.fillText('小型立式数控铣床',256,78);const moduleSign=new THREE.Mesh(new THREE.PlaneGeometry(5.8,1.1),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(moduleSignCanvas),transparent:true,side:THREE.DoubleSide}));moduleSign.position.set(0,4.15,-4.8);secondaryLine.add(moduleSign);
-// 坐姿操作员：参考工人形象采用白色安全帽、深蓝工装、反光条和完整人体比例
-// 人物面向 -Z 方向的操作台，头、躯干、肩肘腕、双腿均独立建模，避免方块拼接感
-function makeWorker(){
- const g=new THREE.Group();g.position.set(9.5,0,4.45);secondaryLine.add(g);
- const suit=mat(0x172b50,.12,.82),suitLight=mat(0x233d68,.12,.78),
-       seam=mat(0x9eabb5,.18,.7),reflect=mat(0xc7d4d8,.25,.45),
-       helmet=mat(0xe9edf0,.12,.42),helmetShade=mat(0xb8c3c9,.22,.48),
-       skin=mat(0xc98f6d,.02,.88),skinDark=mat(0x9d674f,.02,.9),
-       boot=mat(0x101820,.18,.76),sole=mat(0x050a0e,.12,.9),
-       hair=mat(0x24201d,.02,.9),eye=mat(0x17191c,.02,.45);
- const sphere=(parent,x,y,z,sx,sy,sz,material,seg=20)=>{
-  const m=new THREE.Mesh(new THREE.SphereGeometry(1,seg,Math.max(12,Math.floor(seg*.7))),material);
-  m.position.set(x,y,z);m.scale.set(sx,sy,sz);m.castShadow=true;m.receiveShadow=true;parent.add(m);return m;
- };
- const limb=(parent,a,b,r1,r2,material)=>{
-  const av=new THREE.Vector3(...a),bv=new THREE.Vector3(...b),d=new THREE.Vector3().subVectors(bv,av);
-  const m=new THREE.Mesh(new THREE.CylinderGeometry(r2,r1,d.length(),16),material);
-  m.position.copy(av).add(bv).multiplyScalar(.5);m.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),d.normalize());
-  m.castShadow=true;m.receiveShadow=true;parent.add(m);return m;
- };
- // 骨盆与短款工装上衣，肩部略宽、腰部收窄
- box(g,0,.98,0,.54,.34,.38,suit);
- const torso=sphere(g,0,1.42,0,.36,.48,.23,suit,24);
- // 工装前襟、拉链、翻领和胸前口袋
- box(g,0,1.43,-.231,.035,.63,.018,seam,false);
- const lapelL=box(g,-.105,1.78,-.235,.13,.18,.035,suitLight);lapelL.rotation.z=-.28;
- const lapelR=box(g,.105,1.78,-.235,.13,.18,.035,suitLight);lapelR.rotation.z=.28;
- for(const x of [-.22,.22]){
-  box(g,x,1.52,-.232,.18,.19,.025,suitLight);
-  box(g,x,1.60,-.25,.20,.025,.018,seam,false);
+// 按用户最新要求移除产线02这处黄色小立方体，保留其他设备与防护结构
+// 产线02操作工位：替代原红色方块，制作完整 CNC 数控电脑桌
+const line2Console=new THREE.Group();line2Console.position.set(10,0,2.3);secondaryLine.add(line2Console);
+const consoleBody=mat(0x263840,.62,.38),consoleEdge=mat(0x71858b,.72,.28),consoleTop=mat(0x354a50,.62,.32),consoleScreen=mat(0x061923,.25,.16);
+box(line2Console,0,1.12,0,2.65,.16,1.55,consoleTop); // 桌面
+box(line2Console,0,1.00,-.58,2.42,.12,.12,consoleEdge); // 前沿加强梁
+for(const xx of [-1.12,1.12]){box(line2Console,xx,.55,-.48,.20,1.02,.20,consoleBody);box(line2Console,xx,.08,-.48,.48,.12,.48,dark);}
+box(line2Console,0,.72,-.45,2.20,.58,.18,consoleBody); // 前部主机/抽屉柜
+// 后置大屏控制台倾斜面板
+const panelFrame=box(line2Console,0,2.02,-.48,2.12,1.55,.22,consoleBody);panelFrame.rotation.x=-.16;
+const cncCanvas=document.createElement('canvas');cncCanvas.width=640;cncCanvas.height=420;const cncCtx=cncCanvas.getContext('2d');
+cncCtx.fillStyle='#061923';cncCtx.fillRect(0,0,640,420);cncCtx.strokeStyle='#22dce4';cncCtx.lineWidth=8;cncCtx.strokeRect(8,8,624,404);
+cncCtx.fillStyle='#aafaff';cncCtx.font='bold 34px Microsoft YaHei';cncCtx.fillText('FIVE-AXIS CNC  /  产线02',28,54);
+cncCtx.fillStyle='#26e0d9';cncCtx.fillRect(28,76,584,3);cncCtx.fillStyle='#b9dfe3';cncCtx.font='25px Microsoft YaHei';
+cncCtx.fillText('主轴转速  3200 rpm',28,126);cncCtx.fillText('进给倍率  100%    刀具 T08',28,174);cncCtx.fillText('X +012.450   Y -008.210',28,222);cncCtx.fillText('Z +105.600   A +000.000',28,270);
+cncCtx.fillStyle='#21d9a8';cncCtx.fillRect(28,306,270,12);cncCtx.fillStyle='#f3bd42';cncCtx.fillRect(310,306,150,12);cncCtx.fillStyle='#aafaff';cncCtx.font='22px Microsoft YaHei';cncCtx.fillText('加工状态：待机 / READY',28,366);
+const cncTexture=new THREE.CanvasTexture(cncCanvas);const cncDisplay=new THREE.Mesh(new THREE.PlaneGeometry(1.78,1.17),new THREE.MeshBasicMaterial({map:cncTexture}));cncDisplay.position.set(-.30,2.03,-.345);cncDisplay.rotation.x=-.16;line2Console.add(cncDisplay);
+// 右侧实体操作键区：方向键、功能键、数字键和急停按钮
+for(let r=0;r<4;r++)for(let c=0;c<4;c++){const key=box(line2Console,.66+c*.19,1.86-r*.20,-.355,.125,.105,.045,mat((r===0&&c===0)?0x19a98b:((r===3&&c===3)?0xb83238:0x71848a),.35,.34));key.rotation.x=-.16;}
+for(let i=0;i<5;i++){const k=box(line2Console,-.72+i*.25,1.35,-.37,.17,.075,.045,mat([0x1d9c9a,0x71848a,0x71848a,0xd39b32,0x1d9c9a][i],.3,.38));k.rotation.x=-.16;}
+const emergency=new THREE.Mesh(new THREE.CylinderGeometry(.13,.15,.10,24),mat(0xe13b36,.25,.3));emergency.position.set(1.08,1.43,-.36);line2Console.add(emergency);
+const emergencyCap=new THREE.Mesh(new THREE.CylinderGeometry(.105,.105,.045,24),mat(0xff5148,.15,.25));emergencyCap.position.set(1.08,1.50,-.36);line2Console.add(emergencyCap);
+// 桌面键盘与鼠标
+box(line2Console,-.40,1.235,.40,.92,.045,.34,mat(0x17252c,.25,.55));
+for(let r=0;r<3;r++)for(let c=0;c<12;c++)box(line2Console,-.82+c*.075,1.263,.29+r*.075,.055,.012,.045,consoleEdge,false);
+const mouse=new THREE.Mesh(new THREE.SphereGeometry(.095,16,12),mat(0x18252b,.3,.45));mouse.scale.set(.72,.28,1.15);mouse.position.set(.35,1.27,.40);line2Console.add(mouse);
+// 产线02工位不设置凳子：此处仅保留电脑桌与操作终端。
+for(let i=0;i<10;i++)box(secondaryLine,-10+i*2.15,.93,0,.10,.10,1.65,steel,false);
+const moduleSignCanvas=document.createElement('canvas');moduleSignCanvas.width=512;moduleSignCanvas.height=128;const moduleSignCtx=moduleSignCanvas.getContext('2d');moduleSignCtx.fillStyle='#09232b';moduleSignCtx.fillRect(0,0,512,128);moduleSignCtx.strokeStyle='#21d8df';moduleSignCtx.lineWidth=5;moduleSignCtx.strokeRect(4,4,504,120);moduleSignCtx.fillStyle='#c9ffff';moduleSignCtx.font='bold 38px Microsoft YaHei';moduleSignCtx.textAlign='center';moduleSignCtx.fillText('产线 02 · 五轴联动加工模块',256,78);const moduleSign=new THREE.Mesh(new THREE.PlaneGeometry(5.8,1.1),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(moduleSignCanvas),transparent:true,side:THREE.DoubleSide}));moduleSign.position.set(0,4.15,-4.8);secondaryLine.add(moduleSign);
+// 两名车间巡检工人：白色安全帽、藏青工装、银灰反光条与完整四肢
+function makeWorker(x=0,z=0){
+ const g=new THREE.Group();g.position.set(x,0,z);scene.add(g);
+ const suit=mat(0x142d48,.18,.72),pants=mat(0x172d43,.16,.78),helmet=mat(0xf1f4f2,.12,.34),skin=mat(0xc58e70,.04,.82),boot=mat(0x111b23,.28,.7),reflect=mat(0xc5d3d1,.45,.32),yellowTrim=mat(0xe0b64b,.28,.52);
+ const torso=box(g,0,1.23,0,.56,.72,.34,suit);
+ // 胸前拉链、口袋和肩部反光带
+ box(g,0,1.25,.176,.035,.52,.012,reflect,false);
+ box(g,-.17,1.38,.181,.17,.16,.018,mat(0x203d59,.2,.7),false);
+ box(g,.17,1.38,.181,.17,.16,.018,mat(0x203d59,.2,.7),false);
+ for(const y of [1.02,1.58]){
+  box(g,0,y,.177,.59,.055,.018,reflect,false);
  }
- // 颈部、头部、耳朵与简洁五官
- const neck=new THREE.Mesh(new THREE.CylinderGeometry(.095,.11,.17,18),skin);neck.position.set(0,1.88,-.015);g.add(neck);
- sphere(g,0,2.12,-.035,.205,.255,.19,skin,24);
- sphere(g,-.207,2.11,-.025,.052,.075,.045,skin,16);sphere(g,.207,2.11,-.025,.052,.075,.045,skin,16);
- // 头发从安全帽下沿露出少许
- sphere(g,0,2.30,.005,.19,.085,.17,hair,20);
- // 面部朝向控制台（-Z）：眼睛、眉毛、鼻梁和嘴部
- for(const x of [-.078,.078]){
-  sphere(g,x,2.145,-.211,.027,.022,.012,eye,12);
-  const brow=box(g,x,2.19,-.215,.065,.018,.018,hair);brow.rotation.z=x<0?-.12:.12;
+ // 头颈与白色安全帽（帽檐、帽壳、顶部加强筋）
+ const neck=new THREE.Mesh(new THREE.CylinderGeometry(.075,.085,.13,16),skin);neck.position.set(0,1.66,0);g.add(neck);
+ const head=new THREE.Mesh(new THREE.SphereGeometry(.17,22,16),skin);head.position.set(0,1.86,-.015);g.add(head);
+ // 面部细节：小尺寸眼白、深色瞳孔与高光，朝向人物正前方（+Z），避免远景显得像无脸模型。
+ const eyeWhite=mat(0xf1eee7,.02,.42),eyeIris=mat(0x26343b,.08,.3),eyeGlint=new THREE.MeshBasicMaterial({color:0xffffff});
+ for(const ex of [-.060,.060]){
+  const eye=new THREE.Mesh(new THREE.SphereGeometry(.030,14,10),eyeWhite);eye.position.set(ex,1.875,.133);g.add(eye);
+  const pupil=new THREE.Mesh(new THREE.SphereGeometry(.018,12,9),eyeIris);pupil.position.set(ex,1.875,.158);g.add(pupil);
+  const glint=new THREE.Mesh(new THREE.SphereGeometry(.006,8,6),eyeGlint);glint.position.set(ex-.005,1.884,.173);g.add(glint);
  }
- sphere(g,0,2.085,-.224,.025,.043,.025,skinDark,12);
- const mouth=box(g,0,2.035,-.211,.075,.012,.012,skinDark);
- // 白色安全帽：帽壳、帽檐、侧沿和顶部加强筋
- const crown=new THREE.Mesh(new THREE.SphereGeometry(.245,28,18,0,Math.PI*2,0,Math.PI*.58),helmet);
- crown.position.set(0,2.355,-.025);crown.scale.y=.82;crown.castShadow=true;g.add(crown);
- box(g,0,2.335,-.025,.50,.045,.39,helmetShade);
- sphere(g,0,2.40,-.025,.035,.055,.035,helmet,12);
- const brim=box(g,0,2.315,-.045,.54,.045,.43,helmet);brim.rotation.x=.025;
- // 坐姿大腿向前伸出，膝盖弯曲，小腿垂直落地
- for(const side of [-1,1]){
-  const x=side*.17;
-  limb(g,[x,.99,-.02],[x,.88,-.43],.145,.13,suit);
-  sphere(g,x,.875,-.43,.135,.13,.14,suitLight,16);
-  limb(g,[x,.86,-.43],[x,.36,-.40],.105,.085,suit);
-  // 裤腿反光带与裤缝
-  box(g,x,.52,-.405,.205,.055,.025,reflect,false);
-  box(g,x,.74,-.405,.205,.025,.022,seam,false);
-  // 工装鞋、鞋底和鞋头
-  sphere(g,x,.17,-.50,.135,.105,.22,boot,18);
-  box(g,x,.085,-.51,.27,.045,.40,sole);
+ const nose=new THREE.Mesh(new THREE.SphereGeometry(.018,10,8),skin);nose.position.set(0,1.835,.151);g.add(nose);
+ const hat=new THREE.Mesh(new THREE.SphereGeometry(.205,24,14,0,Math.PI*2,0,Math.PI/2),helmet);hat.position.set(0,2.00,-.015);g.add(hat);
+ const brim=new THREE.Mesh(new THREE.CylinderGeometry(.235,.235,.035,32),helmet);brim.position.set(0,1.99,-.015);g.add(brim);
+ box(g,0,2.10,-.015,.045,.045,.26,reflect,false);
+ // 双臂采用独立上臂、前臂和手掌，行走时自然摆动
+ const armL=new THREE.Group();armL.position.set(-.34,1.48,0);g.add(armL);
+ const armR=new THREE.Group();armR.position.set(.34,1.48,0);g.add(armR);
+ for(const [arm,side] of [[armL,-1],[armR,1]]){
+  box(arm,0,-.19,0,.16,.40,.17,suit);
+  box(arm,0,-.44,.015,.135,.34,.14,suit);
+  box(arm,0,-.31,.088,.145,.045,.018,reflect,false);
+  const hand=new THREE.Mesh(new THREE.SphereGeometry(.075,14,10),skin);hand.position.set(0,-.62,.015);arm.add(hand);
  }
- // 肩部、上臂、肘部、前臂与手掌：手腕自然伸向键盘
- const armParts=[];
- for(const side of [-1,1]){
-  const shoulder=[side*.32,1.68,-.015],elbow=[side*.43,1.43,-.39],wrist=[side*.30,1.31,-.91];
-  sphere(g,...shoulder,.145,.15,.15,suitLight,18);
-  limb(g,shoulder,elbow,.105,.085,suit);
-  sphere(g,...elbow,.09,.09,.09,suitLight,16);
-  limb(g,elbow,wrist,.078,.062,suit);
-  // 袖口反光条、手掌及手指
-  const cuff=sphere(g,...wrist,.073,.065,.07,seam,14);
-  const hand=sphere(g,side*.30,1.285,-.985,.075,.055,.105,skin,16);
-  for(let f=0;f<3;f++)sphere(g,side*.30+(f-1)*.035,1.265,-1.055,.014,.025,.045,skinDark,10);
-  armParts.push({upper:null,fore:null,hand});
+ // 腰部与分腿结构、裤腿膝部反光条、工装鞋
+ box(g,0,.80,0,.48,.22,.30,pants);
+ const legL=new THREE.Group();legL.position.set(-.15,.75,0);g.add(legL);
+ const legR=new THREE.Group();legR.position.set(.15,.75,0);g.add(legR);
+ for(const leg of [legL,legR]){
+  box(leg,0,-.25,0,.19,.48,.22,pants);
+  box(leg,0,-.48,.015,.17,.40,.19,pants);
+  box(leg,0,-.34,.12,.18,.045,.018,reflect,false);
+  box(leg,0,-.68,.09,.25,.14,.38,boot);
  }
- // 工作椅：靠背、坐垫、升降气杆、五星脚轮
- box(g,0,.72,.40,.78,.16,.68,dark);
- box(g,0,1.12,.72,.70,.78,.15,suitLight);
- box(g,0,.36,.40,.13,.58,.13,steel);
- const chairHub=new THREE.Mesh(new THREE.CylinderGeometry(.14,.14,.09,20),dark);chairHub.position.set(0,.12,.40);g.add(chairHub);
- for(let a=0;a<5;a++){const ang=a*Math.PI*2/5;const xx=Math.cos(ang)*.38,zz=.40+Math.sin(ang)*.38;limb(g,[0,.12,.40],[xx,.075,zz],.035,.025,steel);sphere(g,xx,.055,zz,.075,.035,.075,boot,12);}
- // 反光肩条和裤腿侧缝，增加参考图中的职业工装细节
- for(const side of [-1,1]){
-  const stripe=box(g,side*.31,1.70,-.02,.13,.045,.20,reflect);stripe.rotation.z=side*.18;
-  box(g,side*.285,1.36,-.16,.025,.40,.025,suitLight,false);
- }
- return {root:g,head:g.children.find(o=>o.geometry&&o.geometry.type==='SphereGeometry'),armL:{rotation:{z:0}},armR:{rotation:{z:0}},legL:{rotation:{x:0}},legR:{rotation:{x:0}}};
+ // 简洁工牌与腰间工具袋
+ box(g,-.22,1.18,.19,.12,.16,.025,reflect,false);
+ box(g,.29,.86,.02,.16,.19,.20,mat(0x263d50,.2,.7));
+ return {root:g,head,armL,armR,legL,legR,torso};
 }
-const worker=makeWorker();let workerMode='station',workerTimer=0,patrolTarget=0,screenRefresh=-1;
-const sparkCount=90,sparkPositions=new Float32Array(sparkCount*3),sparkGeo=new THREE.BufferGeometry();sparkGeo.setAttribute('position',new THREE.BufferAttribute(sparkPositions,3));const sparks=new THREE.Points(sparkGeo,new THREE.PointsMaterial({color:0xffb34d,size:.075,transparent:true,opacity:.9}));scene.add(sparks);
-function burstSparks(){for(let i=0;i<sparkCount;i++){sparkPositions[i*3]=7+(Math.random()-.5)*.8;sparkPositions[i*3+1]=1.5+Math.random()*.5;sparkPositions[i*3+2]=4+(Math.random()-.5)*.8;}sparkGeo.attributes.position.needsUpdate=true;}
+// ============================================================
+// 三名巡检人员
+// 1. 左侧小人：只巡视左侧机床外围
+// 2. 中间小人：保留原来的正确路线，不修改
+// 3. 最右侧小人：只巡视产线02设备外围
+// ============================================================
+
+const worker = makeWorker(-11.2, 4.0);
+const worker2 = makeWorker(11.2, 4.0);
+
+worker.root.rotation.y = Math.PI;
+worker2.root.rotation.y = Math.PI;
+
+let workerMode = 'station';
+let workerTimer = 0;
+let screenRefresh = -1;
+let patrolEnabled = false;
+let worker3 = null;
+
+
+// ============================================================
+// 巡检路线
+// ============================================================
+
+// ------------------------------------------------------------
+// 最左侧小人路线
+//
+// 只围绕主产线最左侧设备区域运行。
+// 不进入机床内部。
+// 不穿过机床。
+// 不穿墙。
+// 不进入传送带区域。
+//
+// 左侧安全通道：
+//   南侧通道 -> 左端通道 -> 北侧通道 -> 左端通道
+// ------------------------------------------------------------
+const leftPatrolRoute = [
+    new THREE.Vector3(-10.25, 0, 6.15),
+    new THREE.Vector3(-3.20, 0, 6.15),
+
+    new THREE.Vector3(-3.20, 0, -7.15),
+    new THREE.Vector3(-10.25, 0, -7.15)
+];
+
+
+// ------------------------------------------------------------
+// 中间小人路线
+//
+// !!! 这里保持原来的路线完全不动 !!!
+//
+// 不修改原有中间小人的巡检逻辑。
+// ------------------------------------------------------------
+const rightPatrolRoute = [
+    new THREE.Vector3(2.8, 0, 6.10),
+    new THREE.Vector3(36.5, 0, 6.10),
+    new THREE.Vector3(36.5, 0, -7.15),
+    new THREE.Vector3(2.8, 0, -7.15)
+];
+
+
+// ------------------------------------------------------------
+// 最右侧小人路线
+//
+// 产线02外围闭环。
+// 整条路线位于设备岛外围。
+// 不穿中央传送带。
+// 不穿电脑桌。
+// 不进入机床之间的狭窄区域。
+// ------------------------------------------------------------
+const line2PatrolRoute = [
+    new THREE.Vector3(9.65, 0, 5.30),
+    new THREE.Vector3(35.50, 0, 5.30),
+
+    new THREE.Vector3(35.50, 0, -7.40),
+    new THREE.Vector3(9.65, 0, -7.40)
+];
+
+
+// ============================================================
+// 路线计算
+// ============================================================
+
+function routeMetrics(route) {
+    const lengths = [];
+    let total = 0;
+
+    for (let i = 0; i < route.length; i++) {
+        const next = route[(i + 1) % route.length];
+        const len = route[i].distanceTo(next);
+
+        lengths.push(len);
+        total += len;
+    }
+
+    return {
+        lengths,
+        total
+    };
+}
+
+
+function routePoint(route, metrics, distance) {
+
+    let d =
+        ((distance % metrics.total) + metrics.total)
+        % metrics.total;
+
+    for (let i = 0; i < route.length; i++) {
+
+        const len = metrics.lengths[i];
+
+        if (d <= len) {
+
+            const k = len > 0 ? d / len : 0;
+
+            return {
+                point: route[i].clone().lerp(
+                    route[(i + 1) % route.length],
+                    k
+                ),
+                segment: i
+            };
+        }
+
+        d -= len;
+    }
+
+    return {
+        point: route[0].clone(),
+        segment: 0
+    };
+}
+
+
+function routeDistanceToSide(route, metrics, side, z) {
+
+    let best = 0;
+    let bestDist = Infinity;
+    let cumulative = 0;
+
+    for (let i = 0; i < route.length; i++) {
+
+        const a = route[i];
+        const b = route[(i + 1) % route.length];
+
+        const dx = b.x - a.x;
+        const dz = b.z - a.z;
+
+        let t = 0;
+
+        if (Math.abs(dx) < 0.001) {
+
+            t = Math.max(
+                0,
+                Math.min(
+                    1,
+                    (z - a.z) / (dz || 1)
+                )
+            );
+
+        } else {
+
+            t = Math.max(
+                0,
+                Math.min(
+                    1,
+                    (side - a.x) / (dx || 1)
+                )
+            );
+        }
+
+        const q = a.clone().lerp(b, t);
+
+        const err = Math.hypot(
+            q.x - side,
+            q.z - z
+        );
+
+        if (err < bestDist) {
+
+            bestDist = err;
+
+            best =
+                cumulative +
+                metrics.lengths[i] * t;
+        }
+
+        cumulative += metrics.lengths[i];
+    }
+
+    return best;
+}
+
+
+// ============================================================
+// 人物行走动作
+// ============================================================
+
+function setWalkPose(person, dir, phase = 0) {
+
+    if (!dir || dir.lengthSq() < 0.000001) {
+        return;
+    }
+
+    person.root.rotation.y =
+        Math.atan2(dir.x, dir.z);
+
+    const swing =
+        Math.sin(performance.now() * 0.008 + phase) * 0.34;
+
+    person.armL.rotation.x = swing;
+    person.armR.rotation.x = -swing;
+
+    person.legL.rotation.x = -swing * 0.78;
+    person.legR.rotation.x = swing * 0.78;
+}
+
+
+// ============================================================
+// 巡检障碍物
+// ============================================================
+
+const patrolObstacleBoxes = [];
+
+
+// 人物中心到障碍物之间的安全余量
+const PATROL_PERSON_RADIUS = 0.42;
+
+
+// 添加障碍物
+function addPatrolObstacle(
+    cx,
+    cz,
+    hx,
+    hz,
+    margin = 0.34
+) {
+
+    patrolObstacleBoxes.push({
+
+        minX: cx - hx - margin,
+        maxX: cx + hx + margin,
+
+        minZ: cz - hz - margin,
+        maxZ: cz + hz + margin
+    });
+}
+
+
+// ============================================================
+// 主产线机床
+// ============================================================
+
+for (const m of machines) {
+
+    addPatrolObstacle(
+        m.position.x,
+        m.position.z,
+        2.18,
+        1.62,
+        0.42
+    );
+}
+
+
+// ============================================================
+// 主传送带
+// ============================================================
+
+addPatrolObstacle(
+    BELT_X,
+    BELT_Z,
+    BELT_LENGTH / 2,
+    1.05,
+    0.70
+);
+
+
+// ============================================================
+// 主产线电脑桌
+// ============================================================
+
+addPatrolObstacle(
+    11.2,
+    2.0,
+    1.05,
+    0.62,
+    0.42
+);
+
+addPatrolObstacle(
+    -11.2,
+    1.9,
+    1.05,
+    0.62,
+    0.42
+);
+
+
+// ============================================================
+// 产线02四台五轴机床
+// ============================================================
+
+for (const localX of [-8, -2.7, 2.6, 7.9]) {
+
+    addPatrolObstacle(
+        23 + localX,
+        -1 - 3.15,
+        1.92,
+        1.58,
+        0.46
+    );
+}
+
+
+// ============================================================
+// 产线02中央传送带
+// ============================================================
+
+addPatrolObstacle(
+    23,
+    -1,
+    11.5,
+    0.78,
+    0.50
+);
+
+
+// ============================================================
+// 产线02电脑桌
+// ============================================================
+
+addPatrolObstacle(
+    33,
+    1.3,
+    1.40,
+    0.90,
+    0.50
+);
+
+
+// ============================================================
+// 精确线段-AABB碰撞
+//
+// 关键修改：
+// 不再只判断起点和终点。
+// 直接判断整条移动线段是否穿过障碍物。
+// ============================================================
+
+function segmentIntersectsBox2D(
+    a,
+    b,
+    box
+) {
+
+    const dx = b.x - a.x;
+    const dz = b.z - a.z;
+
+    let tMin = 0;
+    let tMax = 1;
+
+
+    // X方向
+    if (Math.abs(dx) < 0.000001) {
+
+        if (
+            a.x < box.minX ||
+            a.x > box.maxX
+        ) {
+            return false;
+        }
+
+    } else {
+
+        const invDx = 1 / dx;
+
+        let tx1 =
+            (box.minX - a.x) * invDx;
+
+        let tx2 =
+            (box.maxX - a.x) * invDx;
+
+        if (tx1 > tx2) {
+
+            const tmp = tx1;
+            tx1 = tx2;
+            tx2 = tmp;
+        }
+
+        tMin = Math.max(tMin, tx1);
+        tMax = Math.min(tMax, tx2);
+
+        if (tMin > tMax) {
+            return false;
+        }
+    }
+
+
+    // Z方向
+    if (Math.abs(dz) < 0.000001) {
+
+        if (
+            a.z < box.minZ ||
+            a.z > box.maxZ
+        ) {
+            return false;
+        }
+
+    } else {
+
+        const invDz = 1 / dz;
+
+        let tz1 =
+            (box.minZ - a.z) * invDz;
+
+        let tz2 =
+            (box.maxZ - a.z) * invDz;
+
+        if (tz1 > tz2) {
+
+            const tmp = tz1;
+            tz1 = tz2;
+            tz2 = tmp;
+        }
+
+        tMin = Math.max(tMin, tz1);
+        tMax = Math.min(tMax, tz2);
+
+        if (tMin > tMax) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+
+// ============================================================
+// 连续移动碰撞检测
+//
+// 这里再加一层密集采样。
+// 即使移动速度较快，也不会出现：
+//
+// 路径点 A 安全
+// 路径点 B 安全
+// 但 A -> B 中间穿过机床
+//
+// 的情况。
+// ============================================================
+
+function patrolSegmentIsClear(a, b) {
+
+    const distance = a.distanceTo(b);
+
+    if (distance < 0.0001) {
+        return true;
+    }
+
+
+    // 先使用扩大后的障碍物进行精确线段相交检测
+    for (const o of patrolObstacleBoxes) {
+
+        if (
+            segmentIntersectsBox2D(
+                a,
+                b,
+                o
+            )
+        ) {
+            return false;
+        }
+    }
+
+
+    // 再进行密集采样作为第二层保护
+    const samples =
+        Math.max(
+            2,
+            Math.ceil(distance / 0.08)
+        );
+
+
+    for (let i = 0; i <= samples; i++) {
+
+        const t = i / samples;
+
+        const x =
+            a.x +
+            (b.x - a.x) * t;
+
+        const z =
+            a.z +
+            (b.z - a.z) * t;
+
+
+        for (const o of patrolObstacleBoxes) {
+
+            if (
+                x >= o.minX &&
+                x <= o.maxX &&
+                z >= o.minZ &&
+                z <= o.maxZ
+            ) {
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
+
+// ============================================================
+// 单段移动
+//
+// 每一次实际移动都检查整个移动段。
+// ============================================================
+
+function advanceAgent(agent, dt) {
+
+    const p = agent.person;
+
+    const speed =
+        agent.speed || 1.05;
+
+    let remaining =
+        speed * dt;
+
+
+    while (
+        remaining > 0.0001 &&
+        agent.path &&
+        agent.index < agent.path.length
+    ) {
+
+        const target =
+            agent.path[agent.index];
+
+        const delta =
+            target
+                .clone()
+                .sub(p.root.position);
+
+        const dist =
+            delta.length();
+
+
+        // 到达路径点
+        if (dist < 0.025) {
+
+            p.root.position.copy(target);
+
+            agent.index++;
+
+            continue;
+        }
+
+
+        const step =
+            Math.min(
+                remaining,
+                dist
+            );
+
+
+        delta.normalize();
+
+
+        const candidate =
+            p.root.position
+                .clone()
+                .addScaledVector(
+                    delta,
+                    step
+                );
+
+
+        // 检查整个移动段
+        if (
+            !patrolSegmentIsClear(
+                p.root.position,
+                candidate
+            )
+        ) {
+
+            p.armL.rotation.x = 0;
+            p.armR.rotation.x = 0;
+
+            p.legL.rotation.x = 0;
+            p.legR.rotation.x = 0;
+
+            return false;
+        }
+
+
+        p.root.position.copy(candidate);
+
+        setWalkPose(
+            p,
+            delta,
+            agent.phase || 0
+        );
+
+
+        remaining -= step;
+    }
+
+
+    return !!(
+        agent.path &&
+        agent.index >= agent.path.length
+    );
+}
+
+
+// ============================================================
+// 创建巡检人员
+// ============================================================
+
+function makePatrolAgent(
+    person,
+    route,
+    home,
+    side,
+    phase,
+    homeDistance = null
+) {
+
+    const metrics =
+        routeMetrics(route);
+
+    return {
+
+        person,
+
+        route,
+
+        metrics,
+
+        home:
+            new THREE.Vector3(
+                home.x,
+                0,
+                home.z
+            ),
+
+        side,
+
+        phase,
+
+        homeDistance,
+
+        mode: 'station',
+
+        distance: 0,
+
+        direction: 1,
+
+        speed: 1.05,
+
+        path: null,
+
+        index: 0,
+
+        timer: 0,
+
+        patrolRole: 'middle'
+    };
+}
+
+
+// ============================================================
+// 三名人员
+//
+// 0 = 最左边
+// 1 = 中间
+// 2 = 最右边
+// ============================================================
+
+const patrolAgents = [
+
+    makePatrolAgent(
+        worker,
+        leftPatrolRoute,
+        {
+            x: -11.2,
+            z: 4.0
+        },
+        -10.25,
+        0
+    ),
+
+    makePatrolAgent(
+        worker2,
+        rightPatrolRoute,
+        {
+            x: 11.2,
+            z: 4.0
+        },
+        36.5,
+        Math.PI
+    ),
+
+    null
+];
+
+
+// 明确标记角色
+patrolAgents[0].patrolRole = 'left';
+patrolAgents[1].patrolRole = 'middle';
+
+
+// ============================================================
+// 产线02最右侧小人
+// ============================================================
+
+const line2DeskX = 33;
+const line2DeskZ = 1.3;
+
+const line2WorkerStandZ =
+    line2DeskZ + 1.80;
+
+
+worker3 =
+    makeWorker(
+        line2DeskX,
+        line2WorkerStandZ
+    );
+
+worker3.root.rotation.y = Math.PI;
+
+
+// 最右侧小人只使用产线02外围路线
+patrolAgents[2] =
+    makePatrolAgent(
+        worker3,
+        line2PatrolRoute,
+        {
+            x: line2DeskX,
+            z: line2WorkerStandZ
+        },
+        35.5,
+        Math.PI * 0.5,
+        0
+    );
+
+
+patrolAgents[2].patrolRole = 'right';
+
+
+// ============================================================
+// 找到路线中距离工位最近且安全的点
+// ============================================================
+
+function getNearestSafeRouteDistance(agent) {
+
+    let bestDistance = 0;
+    let bestError = Infinity;
+
+    const samples = 240;
+
+    for (let i = 0; i < samples; i++) {
+
+        const d =
+            agent.metrics.total *
+            i /
+            samples;
+
+        const p =
+            routePoint(
+                agent.route,
+                agent.metrics,
+                d
+            ).point;
+
+
+        if (
+            !patrolSegmentIsClear(
+                p,
+                agent.home
+            )
+        ) {
+            continue;
+        }
+
+
+        const err =
+            p.distanceTo(agent.home);
+
+
+        if (err < bestError) {
+
+            bestError = err;
+            bestDistance = d;
+        }
+    }
+
+    return bestDistance;
+}
+
+
+// ============================================================
+// 开始巡检
+// ============================================================
+
+function beginPatrol(agent) {
+
+    if (!agent) {
+        return;
+    }
+
+
+    // ========================================================
+    // 左侧小人
+    // ========================================================
+
+    if (agent.patrolRole === 'left') {
+
+        const entry =
+            new THREE.Vector3(
+                -10.25,
+                0,
+                6.15
+            );
+
+        agent.path = [entry];
+
+        agent.index = 0;
+
+        agent.distance =
+            routeDistanceToSide(
+                agent.route,
+                agent.metrics,
+                -10.25,
+                6.15
+            );
+
+        agent.mode = 'outbound';
+
+        return;
+    }
+
+
+    // ========================================================
+    // 最右侧小人
+    // ========================================================
+
+    if (agent.patrolRole === 'right') {
+
+        const entry =
+            new THREE.Vector3(
+                35.50,
+                0,
+                5.30
+            );
+
+        agent.path = [entry];
+
+        agent.index = 0;
+
+        agent.distance =
+            routeDistanceToSide(
+                agent.route,
+                agent.metrics,
+                35.50,
+                5.30
+            );
+
+        agent.mode = 'outbound';
+
+        return;
+    }
+
+
+    // ========================================================
+    // 中间小人
+    //
+    // 保持原有逻辑
+    // ========================================================
+
+    const entry =
+        new THREE.Vector3(
+            agent.side,
+            0,
+            4.0
+        );
+
+    agent.path = [entry];
+
+    agent.index = 0;
+
+    agent.distance =
+        routeDistanceToSide(
+            agent.route,
+            agent.metrics,
+            agent.side,
+            4.0
+        );
+
+    agent.mode = 'outbound';
+}
+
+
+// ============================================================
+// 关闭巡检
+//
+// 关键修改：
+// 不再直接：
+//     当前点 -> home
+//
+// 而是：
+//     当前点
+//       ↓
+//     外围安全路线
+//       ↓
+//     安全入口
+//       ↓
+//     工位
+//
+// 这样关闭巡检时也不会穿机床。
+// ============================================================
+
+function beginReturn(agent) {
+
+    if (!agent) {
+        return;
+    }
+
+
+    // --------------------------------------------------------
+    // 如果还在出发阶段
+    // --------------------------------------------------------
+
+    if (agent.mode === 'outbound') {
+
+        const safeDistance =
+            getNearestSafeRouteDistance(agent);
+
+        const safePoint =
+            routePoint(
+                agent.route,
+                agent.metrics,
+                safeDistance
+            ).point;
+
+
+        agent.path = [
+            safePoint,
+            agent.home
+        ];
+
+        agent.index = 0;
+
+        agent.mode = 'homeward';
+
+        return;
+    }
+
+
+    // --------------------------------------------------------
+    // 正在正常巡检
+    // --------------------------------------------------------
+
+    if (agent.mode === 'patrol') {
+
+        const targetDist =
+            getNearestSafeRouteDistance(agent);
+
+
+        const forward =
+            (
+                targetDist -
+                agent.distance +
+                agent.metrics.total
+            ) %
+            agent.metrics.total;
+
+
+        const backward =
+            (
+                agent.distance -
+                targetDist +
+                agent.metrics.total
+            ) %
+            agent.metrics.total;
+
+
+        agent.direction =
+            forward <= backward
+                ? 1
+                : -1;
+
+
+        agent.returnTarget =
+            targetDist;
+
+
+        agent.mode = 'returnLoop';
+
+        agent.path = null;
+
+        agent.index = 0;
+
+        return;
+    }
+
+
+    // --------------------------------------------------------
+    // 已经在返回循环
+    // --------------------------------------------------------
+
+    if (agent.mode === 'returnLoop') {
+
+        return;
+    }
+
+
+    // --------------------------------------------------------
+    // 其他状态
+    // --------------------------------------------------------
+
+    if (
+        agent.mode === 'feedOutbound' ||
+        agent.mode === 'feedReturn'
+    ) {
+
+        const safeDistance =
+            getNearestSafeRouteDistance(agent);
+
+        const safePoint =
+            routePoint(
+                agent.route,
+                agent.metrics,
+                safeDistance
+            ).point;
+
+
+        agent.path = [
+            safePoint,
+            agent.home
+        ];
+
+        agent.index = 0;
+
+        agent.mode = 'homeward';
+    }
+}
+
+
+// ============================================================
+// 更新巡检人员
+// ============================================================
+
+function updatePatrolAgent(agent, dt) {
+
+    if (!agent) {
+        return;
+    }
+
+
+    const p =
+        agent.person;
+
+
+    // ========================================================
+    // 上料相关状态
+    // ========================================================
+
+    if (agent.mode === 'feedOutbound') {
+
+        if (advanceAgent(agent, dt)) {
+
+            agent.mode =
+                'feedStation';
+
+            p.root.rotation.y = Math.PI;
+
+            p.armL.rotation.x =
+                p.armR.rotation.x =
+                p.legL.rotation.x =
+                p.legR.rotation.x = 0;
+
+            feedAttendantReady = true;
+
+            feedSpawnTimer =
+                FEED_INTERVAL;
+
+            const ws =
+                document.getElementById(
+                    'workerState'
+                );
+
+            if (ws) {
+                ws.textContent =
+                    '上料端值守';
+            }
+        }
+
+        return;
+    }
+
+
+    if (agent.mode === 'feedStation') {
+
+        p.armL.rotation.x =
+            p.armR.rotation.x =
+            p.legL.rotation.x =
+            p.legR.rotation.x = 0;
+
+        return;
+    }
+
+
+    if (agent.mode === 'feedReturn') {
+
+        if (advanceAgent(agent, dt)) {
+
+            agent.mode = 'station';
+
+            p.root.rotation.y = Math.PI;
+
+            p.armL.rotation.x =
+                p.armR.rotation.x =
+                p.legL.rotation.x =
+                p.legR.rotation.x = 0;
+
+            const ws =
+                document.getElementById(
+                    'workerState'
+                );
+
+            if (ws) {
+                ws.textContent =
+                    '电脑前待命';
+            }
+        }
+
+        return;
+    }
+
+
+    // ========================================================
+    // 从工位前往外围路线
+    // ========================================================
+
+    if (agent.mode === 'outbound') {
+
+        if (advanceAgent(agent, dt)) {
+
+            agent.mode = 'patrol';
+
+            // 左侧
+            if (agent.patrolRole === 'left') {
+
+                agent.distance =
+                    routeDistanceToSide(
+                        agent.route,
+                        agent.metrics,
+                        -10.25,
+                        6.15
+                    );
+            }
+
+            // 最右侧
+            else if (
+                agent.patrolRole === 'right'
+            ) {
+
+                agent.distance =
+                    routeDistanceToSide(
+                        agent.route,
+                        agent.metrics,
+                        35.50,
+                        5.30
+                    );
+            }
+
+            // 中间小人
+            else {
+
+                agent.distance =
+                    routeDistanceToSide(
+                        agent.route,
+                        agent.metrics,
+                        agent.side,
+                        4.0
+                    );
+            }
+        }
+
+        return;
+    }
+
+
+    // ========================================================
+    // 正常巡检
+    // ========================================================
+
+    if (agent.mode === 'patrol') {
+
+        const nextDistance =
+            (
+                agent.distance +
+                agent.speed * dt
+            ) %
+            agent.metrics.total;
+
+
+        const here =
+            routePoint(
+                agent.route,
+                agent.metrics,
+                agent.distance
+            );
+
+
+        const next =
+            routePoint(
+                agent.route,
+                agent.metrics,
+                nextDistance
+            );
+
+
+        // 检查整个移动段
+        if (
+            patrolSegmentIsClear(
+                p.root.position,
+                next.point
+            )
+        ) {
+
+            agent.distance =
+                nextDistance;
+
+
+            const look =
+                routePoint(
+                    agent.route,
+                    agent.metrics,
+                    agent.distance + 0.12
+                ).point;
+
+
+            const dir =
+                look
+                    .clone()
+                    .sub(next.point);
+
+
+            p.root.position.copy(
+                next.point
+            );
+
+
+            setWalkPose(
+                p,
+                dir,
+                agent.phase
+            );
+
+        } else {
+
+            p.armL.rotation.x =
+                p.armR.rotation.x = 0;
+
+            p.legL.rotation.x =
+                p.legR.rotation.x = 0;
+        }
+
+        return;
+    }
+
+
+    // ========================================================
+    // 沿外围路线返回
+    // ========================================================
+
+    if (agent.mode === 'returnLoop') {
+
+        const diff =
+            agent.direction > 0
+
+                ? (
+                    agent.returnTarget -
+                    agent.distance +
+                    agent.metrics.total
+                ) %
+                agent.metrics.total
+
+                : (
+                    agent.distance -
+                    agent.returnTarget +
+                    agent.metrics.total
+                ) %
+                agent.metrics.total;
+
+
+        const step =
+            Math.min(
+                diff,
+                agent.speed * dt
+            );
+
+
+        const nextDistance =
+            (
+                agent.distance +
+                agent.direction * step +
+                agent.metrics.total
+            ) %
+            agent.metrics.total;
+
+
+        const here =
+            routePoint(
+                agent.route,
+                agent.metrics,
+                agent.distance
+            );
+
+
+        const next =
+            routePoint(
+                agent.route,
+                agent.metrics,
+                nextDistance
+            );
+
+
+        // 检查整段返回路线
+        if (
+            patrolSegmentIsClear(
+                p.root.position,
+                next.point
+            )
+        ) {
+
+            agent.distance =
+                nextDistance;
+
+
+            const look =
+                routePoint(
+                    agent.route,
+                    agent.metrics,
+                    agent.distance +
+                    agent.direction * 0.12
+                ).point;
+
+
+            const dir =
+                look
+                    .clone()
+                    .sub(next.point);
+
+
+            p.root.position.copy(
+                next.point
+            );
+
+
+            setWalkPose(
+                p,
+                dir,
+                agent.phase
+            );
+
+
+            // 到达安全返回点
+            if (diff <= step + 0.001) {
+
+                const safePoint =
+                    next.point.clone();
+
+
+                // 最后一段进入工位
+                if (
+                    patrolSegmentIsClear(
+                        safePoint,
+                        agent.home
+                    )
+                ) {
+
+                    agent.path = [
+                        agent.home
+                    ];
+
+                    agent.index = 0;
+
+                    agent.mode =
+                        'homeward';
+
+                } else {
+
+                    // 如果最后一段仍然不安全，
+                    // 停在外围，不允许穿过去。
+                    agent.mode =
+                        'returnBlocked';
+                }
+            }
+
+        } else {
+
+            p.armL.rotation.x =
+                p.armR.rotation.x = 0;
+
+            p.legL.rotation.x =
+                p.legR.rotation.x = 0;
+        }
+
+        return;
+    }
+
+
+    // ========================================================
+    // 从安全入口进入工位
+    // ========================================================
+
+    if (agent.mode === 'homeward') {
+
+        if (advanceAgent(agent, dt)) {
+
+            agent.mode =
+                'station';
+
+            p.root.position.copy(
+                agent.home
+            );
+
+            p.root.rotation.y =
+                Math.PI;
+
+            p.armL.rotation.x =
+                p.armR.rotation.x =
+                p.legL.rotation.x =
+                p.legR.rotation.x = 0;
+        }
+
+        return;
+    }
+
+
+    // ========================================================
+    // 如果返回路线被阻挡
+    //
+    // 不允许穿墙。
+    // 下一帧继续尝试。
+    // ========================================================
+
+    if (agent.mode === 'returnBlocked') {
+
+        p.armL.rotation.x =
+            p.armR.rotation.x = 0;
+
+        p.legL.rotation.x =
+            p.legR.rotation.x = 0;
+
+        const safeDistance =
+            getNearestSafeRouteDistance(agent);
+
+
+        const safePoint =
+            routePoint(
+                agent.route,
+                agent.metrics,
+                safeDistance
+            ).point;
+
+
+        if (
+            patrolSegmentIsClear(
+                p.root.position,
+                safePoint
+            )
+        ) {
+
+            agent.distance =
+                safeDistance;
+
+            agent.mode =
+                'returnLoop';
+        }
+
+        return;
+    }
+}
+
+
+// ============================================================
+// 巡检开关
+// ============================================================
+
+window.addEventListener(
+    'twin-patrol-toggle',
+    e => {
+
+        patrolEnabled =
+            !!e.detail.enabled;
+
+
+        for (
+            const agent of patrolAgents
+        ) {
+
+            if (!agent) {
+                continue;
+            }
+
+
+            if (patrolEnabled) {
+
+                beginPatrol(agent);
+
+            } else if (
+                agent.mode !== 'station'
+            ) {
+
+                beginReturn(agent);
+            }
+        }
+
+
+        // 产线02最右侧人员
+        if (worker3) {
+
+            const agent =
+                patrolAgents[2];
+
+
+            if (patrolEnabled) {
+
+                beginPatrol(agent);
+
+            } else if (
+                agent.mode !== 'station'
+            ) {
+
+                beginReturn(agent);
+            }
+        }
+
+
+        const ws =
+            document.getElementById(
+                'workerState'
+            );
+
+
+        if (ws) {
+
+            ws.textContent =
+                patrolEnabled
+                    ? '三人设备巡检'
+                    : '巡检人员返回工位';
+        }
+    }
+);
+
 
 let totalDetected=0,goodDetected=0,badDetected=0,missingDetected=0,rejectStored=0,activePick=null;
 window.twinTelemetry={rpm:3200,temp:36.5,load:68};
@@ -763,22 +2341,9 @@ function logSort(message){const el=document.getElementById('sortLog');if(el)el.i
 
 // 工件补料安全检查：入口有足够空位才重新出现，避免重生时与其他工件重叠
 function tryRespawnPart(part){
- const spawnX=10.0;
- for(const other of workpieces){
-  if(other===part || !other.visible)continue;
-  if(other.userData.state==='stored' || other.userData.state==='waitingSpawn')continue;
-  if(Math.abs(other.position.x-spawnX)<3.0 &&
-     Math.abs(other.position.z-BELT_Z)<.45){
-   return false;
-  }
- }
- part.position.set(spawnX,1.02,BELT_Z);
- part.visible=true;
+ part.visible=false;
+ part.userData.state='waitingSpawn';
  part.userData.classified=false;
- part.userData.state='moving';
- part.userData.bad=Math.random()<.30;
- part.userData.missing=part.userData.bad&&Math.random()<.5;
- part.userData.pickT=0;
  part.userData.storedT=0;
  return true;
 }
@@ -854,7 +2419,52 @@ function makeWorkstation(x,z,label){const g=new THREE.Group();g.position.set(x,0
  // 靠背支架连接座面，靠背下沿贴近座面
  box(g,0,.82,1.34,.075,.58,.075,steel);
  box(g,0,1.02,1.37,.62,.48,.12,mat(0x263b42,.45,.7));box(g,-.78,.36,-.1,.72,.48,.55,mat(0x29363b,.7,.55));for(let i=0;i<3;i++)box(g,-.78,.65+i*.08,-.1,.48,.025,.42,steel,false);return g;}
-makeWorkstation(11.2,2.0,'A01 操作台');makeWorkstation(-11.2,1.9,'视觉检测操作台');box(scene,0,.35,-8.1,29,.22,.38,ductMat);for(let x=-14;x<=14;x+=2)box(scene,x,.48,-8.1,.045,.08,.42,steel,false);
+makeWorkstation(11.2,2.0,'A01 操作台');makeWorkstation(-11.2,1.9,'视觉检测操作台');
+// 产线02操作员初始站立在电脑桌旁；启动巡检后沿产线外围路线巡检。
+const line2DeskX=33,line2DeskZ=1.3;
+const line2WorkerStandZ=line2DeskZ+1.80;
+worker3=makeWorker(line2DeskX,line2WorkerStandZ);worker3.root.rotation.y=Math.PI;
+// 返回目标为电脑工位旁的站立点；巡检关闭后沿通道返回并保持站立。
+patrolAgents[2]=makePatrolAgent(worker3,line2PatrolRoute,{x:line2DeskX,z:line2WorkerStandZ},35.5,Math.PI*.5,0);
+// 工人碰撞安全区：所有障碍物在实际外形尺寸上增加安全余量，按人物中心点进行连续线段采样。
+// 机床、传送带、电脑桌均作为不可穿越区域；巡检路线与返回路线都经过同一套检查。
+const patrolObstacleBoxes=[];
+function addPatrolObstacle(cx,cz,hx,hz,margin=.34){patrolObstacleBoxes.push({minX:cx-hx-margin,maxX:cx+hx+margin,minZ:cz-hz-margin,maxZ:cz+hz+margin});}
+// 主产线五台机床（保留设备自身真实占地尺寸）
+for(const m of machines)addPatrolObstacle(m.position.x,m.position.z,2.18,1.62,.34);
+// 主传送带及两侧护栏
+addPatrolObstacle(BELT_X,BELT_Z,BELT_LENGTH/2,1.05,.62);
+// 两台主产线电脑工作台
+addPatrolObstacle(11.2,2.0,1.05,.62,.34);
+addPatrolObstacle(-11.2,1.9,1.05,.62,.34);
+// 产线02四台五轴机床：父组坐标(23,-1) + 子机床局部坐标
+for(const localX of [-8,-2.7,2.6,7.9])addPatrolObstacle(23+localX,-1-3.15,1.92,1.58,.36);
+// 产线02中央传送带与大型 CNC 操作台
+addPatrolObstacle(23,-1,11.5,.78,.38);
+addPatrolObstacle(line2DeskX,line2DeskZ,1.40,.90,.38);
+// 计算离传送带上料端最近的巡检人员。当前场景中会选中主产线右侧工人 W02。
+const feedHeadPoint=new THREE.Vector3(BELT_RIGHT-.8,0,BELT_Z);
+feedAttendantAgent=patrolAgents.filter(Boolean).reduce((best,agent)=>{
+ const d=agent.person.root.position.distanceToSquared(feedHeadPoint);
+ return !best||d<best.distance?{agent,distance:d}:best;
+},null)?.agent||null;
+function beginFeedAttendant(agent){
+ if(!agent)return;
+ // 上料值守路线完全绕开传送带：先走到传送带右端外侧，再从传送带前侧靠近。
+ // 人物中心与传送带边缘保持约 0.85m 安全距离，避免身体、腿脚与模型发生穿模。
+ const staging=new THREE.Vector3(12.6,0,4.0);
+ const approach=new THREE.Vector3(12.6,0,9.45);
+ const feedStand=new THREE.Vector3(11.15,0,9.45);
+ agent.path=[staging,approach,feedStand];agent.index=0;agent.mode='feedOutbound';
+}
+function beginFeedAttendantReturn(agent){
+ if(!agent)return;
+ feedAttendantReady=false;
+ // 关闭零件检测后沿完全相同的安全通道返回，不穿过传送带。
+ agent.path=[new THREE.Vector3(12.6,0,9.45),new THREE.Vector3(12.6,0,4.0),agent.home.clone()];
+ agent.index=0;agent.mode='feedReturn';
+}
+box(scene,0,.35,-8.1,29,.22,.38,ductMat);for(let x=-14;x<=14;x+=2)box(scene,x,.48,-8.1,.045,.08,.42,steel,false);
 // 设备状态灯
 const lamps=[];
 machines.forEach((m,i)=>{
@@ -893,66 +2503,50 @@ function animate(){
   }
   robot.wrist.rotation.x=-.10;
   if(q>=1){p.visible=false;p.userData.state='stored';p.userData.storedT=0;rejectStored++;activePick=null;robot.shoulder.rotation.x=0;robot.elbow.rotation.x=0;robot.wrist.rotation.x=0;robot.fingerL.position.x=-.19;robot.fingerR.position.x=.19;logSort('<span style="color:#ff7777">缺陷件已投入旁侧废品箱</span>');const rs=document.getElementById('robotState');if(rs)rs.textContent='复位中';setTimeout(()=>{if(rs)rs.textContent='待机';},650);const rd=document.getElementById('robotDot');if(rd)rd.className='dot';updateProductionBoard();}
- }else{robot.shoulder.rotation.x=Math.sin(t*1.2)*.035;robot.elbow.rotation.x=.10+Math.sin(t*1.2+1)*.025;robot.wrist.rotation.x=Math.sin(t*.9)*.025;}
+ }else if(autoDetectionEnabled){robot.shoulder.rotation.x=Math.sin(t*1.2)*.035;robot.elbow.rotation.x=.10+Math.sin(t*1.2+1)*.025;robot.wrist.rotation.x=Math.sin(t*.9)*.025;}else{robot.shoulder.rotation.x=0;robot.elbow.rotation.x=0;robot.wrist.rotation.x=0;}
  // 主轴旋转及告警灯与实时转速/温度联动；机床观察门保持固定关闭
  const tele=window.twinTelemetry||{rpm:3200,temp:36.5};
  machineDynamics.forEach(d=>{d.spindle.rotation.y+=Math.max(.008,(tele.rpm||3200)/3200*.045);const hot=(tele.temp||36.5)>36.9;d.beacon.material.color.setHex(hot?0xff5a35:0x27e5a0);d.beacon.material.emissive.setHex(hot?0x8a1808:0x087c45);});
  fiveAxisDynamics.forEach((d,i)=>{d.spindle.rotation.y+=Math.max(.008,(tele.rpm||3200)/3200*.04);d.trunnion.rotation.x=Math.sin(t*.42+i*.7)*.10;d.mag.rotation.x+=.0015;});
- // 坐姿操作员持续监控数控系统；机械臂分拣缺陷件时转头查看并轻抬右手
- if(workerMode==='inspectReject'){worker.head.rotation.y=.48;worker.armR.rotation.z=-.18+Math.sin(t*5)*.045;worker.armL.rotation.z=.04;workerTimer+=.016;if(workerTimer>2.8){workerMode='station';workerTimer=0;worker.head.rotation.y=0;worker.armR.rotation.z=0;worker.armL.rotation.z=0;const ws=document.getElementById('workerState');if(ws)ws.textContent='工位监控';}}
- else{worker.head.rotation.y=Math.sin(t*.45)*.035;worker.armR.rotation.z=Math.sin(t*1.8)*.018;worker.armL.rotation.z=-Math.sin(t*1.8)*.018;}
+ // 双人巡检沿机床外围持续行走；缺陷分拣时第一名工人短暂转头关注
+ if(workerMode==='inspectReject'){worker.head.rotation.y=.48;worker.armR.rotation.x=-.25+Math.sin(t*5)*.045;workerTimer+=.016;if(workerTimer>2.8){workerMode=patrolEnabled?'patrol':'station';workerTimer=0;worker.head.rotation.y=0;}}
+ patrolAgents.forEach(agent=>{if(agent)updatePatrolAgent(agent,1/60);});if(!patrolEnabled&&patrolAgents.every(agent=>agent&&agent.mode==='station')){const ws=document.getElementById('workerState');if(ws)ws.textContent='电脑前待命';}
  if(Math.floor(t*2)%7===0&&Math.random()<.035)burstSparks();
  // 远距离自动降低第二模块细节负载（LOD）
  secondaryLine.visible=camera.position.distanceTo(secondaryLine.position)<58;
- beltRollers.forEach(roller=>{roller.rotation.x-=.045;});
+ // 零件检测开启后，先等待值守工人抵达上料端，再按间隔逐件生成新零件。
+ if(materialFeedEnabled&&feedAttendantReady){
+  feedSpawnTimer+=1/60;
+  if(feedSpawnTimer>=FEED_INTERVAL){feedSpawnTimer=0;spawnNextPart();}
+ }
+ // 只要传送带上还有零件，就持续运行；关闭零件检测只停止新增，不停止已有零件输送。
+ if(workpieces.some(part=>part.visible&&(part.userData.state==='moving'||part.userData.state==='passed'||part.userData.state==='queued'))){
+  beltRollers.forEach(roller=>{roller.rotation.x-=.045;});
+ }
  workpieces.forEach(part=>{
-  // 分拣完成的工件短暂进入废品箱后，模拟新工件补料，重新回到传送带入口
-  if(part.userData.state==='stored'){
-   part.userData.storedT=(part.userData.storedT||0)+.016;
-   if(part.userData.storedT>1.35){
-    part.userData.state='waitingSpawn';
-    part.visible=false;
-    tryRespawnPart(part);
-   }
-   return;
-  }
-  if(part.userData.state==='waitingSpawn'){
-   tryRespawnPart(part);
-   return;
-  }
+  if(!part.visible)return;
   if(part.userData.state==='rejecting')return;
   if(part.userData.state==='queued'){
-   if(!activePick){part.userData.state='moving';classifyPart(part);}
+   if(!activePick&&autoDetectionEnabled){part.userData.state='moving';classifyPart(part);}
    return;
   }
   if(part.userData.state==='moving'||part.userData.state==='passed'){
-   // 防追尾：运动方向为-X，前方工件不足3.0间距时暂停当前工件
    let blockedByPart=false;
    for(const other of workpieces){
-    if(other===part || !other.visible)continue;
-    if(other.userData.state==='stored' || other.userData.state==='waitingSpawn')continue;
+    if(other===part||!other.visible)continue;
     const gap=part.position.x-other.position.x;
-    if(gap>0 && gap<3.0 &&
-       Math.abs(part.position.z-other.position.z)<.45){
-     blockedByPart=true;
-     break;
-    }
+    if(gap>0&&gap<2.7&&Math.abs(part.position.z-other.position.z)<.45){blockedByPart=true;break;}
    }
-   if(!blockedByPart)part.position.x-=.012;
-
-   if(!part.userData.classified&&part.position.x<=-1.1){
+   // 已经生成的零件始终沿传送带运行；关闭上料功能不影响在途零件。速度设为中等档，避免过慢或过快。
+   if(!blockedByPart)part.position.x-=.024;
+   if(autoDetectionEnabled&&!part.userData.classified&&part.position.x<=-1.1){
     if(activePick&&part.userData.bad){part.position.x=-1.1;part.userData.state='queued';}
     else classifyPart(part);
    }
-   // 到达传送带左端后等待入口空位，再安全循环补料
-   if(part.position.x<BELT_LEFT+.25){
-    part.userData.state='waitingSpawn';
-    part.visible=false;
-    tryRespawnPart(part);
-   }
+   if(part.position.x<BELT_LEFT+.25)tryRespawnPart(part);
   }
  });
- detectFrame.material.opacity=.55+.45*Math.sin(t*3);detectFrame.material.transparent=true;detectBeam.intensity=4+1.5*Math.sin(t*4);
+ detectFrame.material.opacity=autoDetectionEnabled?(.55+.45*Math.sin(t*3)):.10;detectFrame.material.transparent=true;detectBeam.intensity=autoDetectionEnabled?(4+1.5*Math.sin(t*4)):0;
  controls.update();renderer.render(scene,camera);
 }
 animate();
@@ -963,7 +2557,7 @@ addEventListener('resize',()=>{
 </script>
 
 <script>
-let auto=true;
+let auto=false,feedOn=false,patrolOn=false;
 function updateClock(){
  const d=new Date();
  document.getElementById('clock').textContent=d.toLocaleDateString('zh-CN')+' '+d.toLocaleTimeString('zh-CN',{hour12:false});
@@ -972,9 +2566,21 @@ updateClock();setInterval(updateClock,1000);window.twinTelemetry={rpm:3200,temp:
 function toggleAuto(){
  auto=!auto;
  const b=document.getElementById('autoBtn');
- b.classList.toggle('active',auto);
- b.textContent=auto?'自动监测':'暂停监测';
- showToast(auto?'已开启自动监测':'已暂停自动监测');
+ b.classList.toggle('active',auto);b.textContent='缺陷检测';
+ window.dispatchEvent(new CustomEvent('twin-auto-toggle',{detail:{enabled:auto}}));
+ showToast(auto?'缺陷检测已启动：相机开始识别传送带零件':'缺陷检测已关闭：相机停止识别');
+}
+function toggleFeed(){
+ feedOn=!feedOn;const b=document.getElementById('feedBtn');
+ b.classList.toggle('active',feedOn);b.textContent=feedOn?'停止零件检测':'零件检测';
+ window.dispatchEvent(new CustomEvent('twin-feed-toggle',{detail:{enabled:feedOn}}));
+ showToast(feedOn?'零件检测已启动：最近的工人前往上料端，抵达后逐件生成零件':'已停止生成新零件；传送带上的零件继续运行，工人返回工位');
+}
+function togglePatrol(){
+ patrolOn=!patrolOn;const b=document.getElementById('patrolBtn');
+ b.classList.toggle('active',patrolOn);
+ window.dispatchEvent(new CustomEvent('twin-patrol-toggle',{detail:{enabled:patrolOn}}));
+ showToast(patrolOn?'三名巡检人员已启动，沿设备外围通道巡检':'巡检已关闭，人员正沿安全通道返回电脑工位');
 }
 function selectDevice(el,name){
  document.querySelectorAll('.device').forEach(x=>x.classList.remove('selected'));
@@ -995,15 +2601,14 @@ function openPanel(type){
   body.innerHTML='<p>主轴转速：'+document.getElementById('rpm').textContent+' rpm</p><p>主轴负载：'+document.getElementById('load').textContent+'%</p><p>设备温度：'+document.getElementById('temp').textContent+' ℃</p><p>视觉相机：CAM-01 在线</p><p>检测结果为演示数据；接入 ONNX 模型后显示真实识别类别与置信度。</p>';
  }else if(type==='inspect'){
   title.textContent='设备巡检任务';
-  body.innerHTML='<p>巡检对象：A01 数控加工中心、CAM-01 工业相机、传送带 D04、机械臂 C03、工人 W01</p><p>巡检项目：设备在线状态、温度、运行负载、相机画面、输送线运行情况、废品箱容量。</p><p>检测画面：CAM-01 当前工件帧（演示数据）</p><p>分拣日志：'+document.getElementById('sortLog').innerText+'</p><p id="inspectResult">待执行巡检。</p><button class="action" onclick="runInspection()">开始巡检</button>';
+  body.innerHTML='<p>巡检对象：A01 数控加工中心、CAM-01 工业相机、传送带 D04、机械臂 C03、工人 W01</p><p>巡检项目：设备在线状态、温度、运行负载、相机画面、输送线运行情况、废品箱容量。</p><p>检测画面：CAM-01 当前工件帧（演示数据）</p><p>分拣日志：'+document.getElementById('sortLog').innerText+'</p><p id="inspectResult">巡检人员：2 名工人待命。点击开始巡检后，两名巡检工人将沿机床外围路线行走。</p><button class="action" onclick="togglePatrol()">开始 / 停止双人巡检</button>';
  }else if(type==='device'){
   // 设备详情内容已由 selectDevice 填充
  }
  mask.classList.add('show');
 }
 function runInspection(){
- document.getElementById('inspectResult').textContent='巡检完成：演示环境下设备状态正常，相机在线，输送线运行中。';
- showToast('设备巡检已完成');
+ togglePatrol();const result=document.getElementById('inspectResult');if(result)result.textContent=patrolOn?'两名巡检工人正在沿机床外围巡检。':'巡检已暂停，两名工人返回待命状态。';
 }
 function closePanel(e){if(!e||e.target.id==='modalMask')document.getElementById('modalMask').classList.remove('show');}
 function resetCameraView(){window.dispatchEvent(new Event('reset-twin-camera'));showToast('3D视角已复位');}
