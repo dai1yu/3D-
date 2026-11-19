@@ -195,10 +195,13 @@ import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/exampl
 
 const canvas=document.querySelector('#scene');
 const renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:true});
-renderer.setPixelRatio(Math.min(devicePixelRatio,1.65));
+renderer.setPixelRatio(Math.min(devicePixelRatio,1.30));
 renderer.setSize(innerWidth,innerHeight);
 renderer.shadowMap.enabled=true;
 renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+renderer.shadowMap.autoUpdate=false;
+renderer.shadowMap.needsUpdate=true;
+key.shadow.mapSize.set(1024,1024);
 renderer.toneMapping=THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure=1.15;
 
@@ -800,11 +803,30 @@ function routeMetrics(route){const lengths=[];let total=0;for(let i=0;i<route.le
 function routePoint(route,metrics,distance){let d=((distance%metrics.total)+metrics.total)%metrics.total;for(let i=0;i<route.length;i++){const len=metrics.lengths[i];if(d<=len){const k=len?d/len:0;return {point:route[i].clone().lerp(route[(i+1)%route.length],k),segment:i};}d-=len;}return {point:route[0].clone(),segment:0};}
 function routeDistanceToSide(route,metrics,side,z){let best=0,bestDist=Infinity,cum=0;for(let i=0;i<route.length;i++){const a=route[i],b=route[(i+1)%route.length],dx=b.x-a.x,dz=b.z-a.z;let t=0;if(Math.abs(dx)<.001)t=Math.max(0,Math.min(1,(z-a.z)/(dz||1)));else t=Math.max(0,Math.min(1,(side-a.x)/(dx||1)));const q=a.clone().lerp(b,t),err=Math.hypot(q.x-side,q.z-z);if(err<bestDist){bestDist=err;best=cum+metrics.lengths[i]*t;}cum+=metrics.lengths[i];}return best;}
 function setWalkPose(person,dir,phase=0){person.root.rotation.y=Math.atan2(dir.x,dir.z);const swing=Math.sin(performance.now()*.008+phase)*.34;person.armL.rotation.x=swing;person.armR.rotation.x=-swing;person.legL.rotation.x=-swing*.78;person.legR.rotation.x=swing*.78;}
+// 线段与扩张后的障碍物矩形做精确相交检测：保留原有安全余量，避免巡检人员穿模，
+ // 同时将“沿线密集采样 × 全障碍遍历”改为一次矩形相交判断。
+function segmentIntersectsObstacle(a,b,o){
+ const dx=b.x-a.x,dz=b.z-a.z;
+ let tMin=0,tMax=1;
+ if(Math.abs(dx)<1e-8){if(a.x<o.minX||a.x>o.maxX)return false;}
+ else{
+  let t1=(o.minX-a.x)/dx,t2=(o.maxX-a.x)/dx;
+  if(t1>t2){const tmp=t1;t1=t2;t2=tmp;}
+  tMin=Math.max(tMin,t1);tMax=Math.min(tMax,t2);
+  if(tMin>tMax)return false;
+ }
+ if(Math.abs(dz)<1e-8){if(a.z<o.minZ||a.z>o.maxZ)return false;}
+ else{
+  let t1=(o.minZ-a.z)/dz,t2=(o.maxZ-a.z)/dz;
+  if(t1>t2){const tmp=t1;t1=t2;t2=tmp;}
+  tMin=Math.max(tMin,t1);tMax=Math.min(tMax,t2);
+  if(tMin>tMax)return false;
+ }
+ return tMax>=0&&tMin<=1;
+}
 function patrolSegmentIsClear(a,b){
- const distance=a.distanceTo(b),samples=Math.max(1,Math.ceil(distance/.12));
- for(let i=0;i<=samples;i++){
-  const t=i/samples,x=a.x+(b.x-a.x)*t,z=a.z+(b.z-a.z)*t;
-  for(const o of patrolObstacleBoxes){if(x>=o.minX&&x<=o.maxX&&z>=o.minZ&&z<=o.maxZ)return false;}
+ for(let i=0;i<patrolObstacleBoxes.length;i++){
+  if(segmentIntersectsObstacle(a,b,patrolObstacleBoxes[i]))return false;
  }
  return true;
 }
@@ -817,7 +839,7 @@ function pClone(v){return new THREE.Vector3(v.x,0,v.z);}
 function updatePatrolAgent(agent,dt){
  const p=agent.person;
  if(agent.mode==='feedOutbound'){
-  if(advanceAgent(agent,dt)){agent.mode='feedStation';p.root.rotation.y=Math.PI;p.armL.rotation.x=p.armR.rotation.x=p.legL.rotation.x=p.legR.rotation.x=0;feedAttendantReady=true;feedSpawnTimer=FEED_INTERVAL;const ws=document.getElementById('workerState');if(ws)ws.textContent='上料端值守';}
+  if(advanceAgent(agent,dt)){agent.mode='feedStation';p.root.rotation.y=-Math.PI/2;p.armL.rotation.x=p.armR.rotation.x=p.legL.rotation.x=p.legR.rotation.x=0;feedAttendantReady=true;feedSpawnTimer=FEED_INTERVAL;const ws=document.getElementById('workerState');if(ws)ws.textContent='上料端值守';}
  }else if(agent.mode==='feedStation'){
   p.armL.rotation.x=p.armR.rotation.x=p.legL.rotation.x=p.legR.rotation.x=0;
  }else if(agent.mode==='feedReturn'){
@@ -928,7 +950,7 @@ function warningSign(x,y,z,textLabel){
  box(g,0,-1.72,-.035,.52,.12,.42,dark);
  box(g,0,-1.64,-.035,.38,.08,.30,steel);
 }
-warningSign(12,2.4,5.5,'注意夹伤');warningSign(-13,2.2,5.5,'安全通道');
+warningSign(-13,2.2,5.5,'安全通道');
 // 工位工作台、实时数据屏、工位椅、工具箱与线槽
 const workstationScreens=[];
 function makeWorkstation(x,z,label){const g=new THREE.Group();g.position.set(x,0,z);scene.add(g);box(g,0,.92,0,2.0,.12,1.05,mat(0x59666a,.65,.65));box(g,0,.48,-.36,1.45,.78,.12,steel);box(g,0,1.55,-.22,.92,.62,.10,dark);const sc=document.createElement('canvas');sc.width=512;sc.height=300;const sx=sc.getContext('2d');sx.fillStyle='#061923';sx.fillRect(0,0,512,300);sx.fillStyle='#35e4df';sx.font='bold 30px sans-serif';sx.fillText(label,22,42);sx.fillStyle='#9de8e5';sx.font='22px sans-serif';sx.fillText('CAM-01  ONLINE',22,95);sx.fillText('检测记录  /  分拣日志',22,142);sx.fillStyle='#16d9df';sx.fillRect(22,168,460,3);sx.fillStyle='#b7d9dc';sx.font='20px sans-serif';sx.fillText('等待实时数据...',22,214);const screenTexture=new THREE.CanvasTexture(sc);const screenMaterial=new THREE.MeshBasicMaterial({map:screenTexture});const screen=box(g,0,1.56,-.145,.82,.48,.018,screenMaterial,false);workstationScreens.push({screen,label,canvas:sc,ctx:sx,texture:screenTexture});// 工位椅：座面下增加四条落地椅腿，靠背与座面连接，消除悬空感
@@ -954,7 +976,7 @@ function addPatrolObstacle(cx,cz,hx,hz,margin=.34){patrolObstacleBoxes.push({min
 // 主产线五台机床（保留设备自身真实占地尺寸）
 for(const m of machines)addPatrolObstacle(m.position.x,m.position.z,2.18,1.62,.34);
 // 主传送带及两侧护栏
-addPatrolObstacle(BELT_X,BELT_Z,BELT_LENGTH/2,1.05,.62);
+addPatrolObstacle(BELT_X,BELT_Z,BELT_LENGTH/2,.90,.32);
 // 两台主产线电脑工作台
 addPatrolObstacle(11.2,2.0,1.05,.62,.34);
 addPatrolObstacle(-11.2,1.9,1.05,.62,.34);
@@ -971,19 +993,16 @@ feedAttendantAgent=patrolAgents.filter(Boolean).reduce((best,agent)=>{
 },null)?.agent||null;
 function beginFeedAttendant(agent){
  if(!agent)return;
- // 上料值守路线完全绕开传送带：先走到传送带右端外侧，再从传送带前侧靠近。
- // 人物中心与传送带边缘保持约 0.85m 安全距离，避免身体、腿脚与模型发生穿模。
- const staging=new THREE.Vector3(12.6,0,4.0);
- const approach=new THREE.Vector3(12.6,0,9.45);
- const feedStand=new THREE.Vector3(11.15,0,9.45);
- agent.path=[staging,approach,feedStand];agent.index=0;agent.mode='feedOutbound';
+ // 从右侧工位沿传送带外侧通道走到上料端，不跨越传送带或机床。
+ const staging=new THREE.Vector3(12.2,0,4.0);
+ const feedStand=new THREE.Vector3(12.2,0,BELT_Z);
+ agent.path=[staging,feedStand];agent.index=0;agent.mode='feedOutbound';
 }
 function beginFeedAttendantReturn(agent){
  if(!agent)return;
  feedAttendantReady=false;
- // 关闭零件检测后沿完全相同的安全通道返回，不穿过传送带。
- agent.path=[new THREE.Vector3(12.6,0,9.45),new THREE.Vector3(12.6,0,4.0),agent.home.clone()];
- agent.index=0;agent.mode='feedReturn';
+ // 沿原路反向返回电脑工位；已走到上料端时先退回通道，再回到工位。
+ agent.path=[new THREE.Vector3(12.2,0,4.0),agent.home.clone()];agent.index=0;agent.mode='feedReturn';
 }
 box(scene,0,.35,-8.1,29,.22,.38,ductMat);for(let x=-14;x<=14;x+=2)box(scene,x,.48,-8.1,.045,.08,.42,steel,false);
 // 设备状态灯
@@ -993,12 +1012,20 @@ machines.forEach((m,i)=>{
  l.position.set(m.position.x,m.position.y+3.3,m.position.z);scene.add(l);lamps.push(l);
 });
 
-function animate(){
+let lastFrameTime=0;
+const TARGET_FRAME_MS=1000/45;
+function animate(now=performance.now()){
  requestAnimationFrame(animate);
- const t=performance.now()*.001;
+ if(!lastFrameTime)lastFrameTime=now;
+ const elapsed=now-lastFrameTime;
+ if(elapsed<TARGET_FRAME_MS)return;
+ const delta=Math.min(elapsed/1000,.05);
+ const frameScale=delta*60;
+ lastFrameTime=now;
+ const t=now*.001;
  if(Math.floor(t)!==screenRefresh){screenRefresh=Math.floor(t);workstationScreens.forEach(item=>{const c=item.ctx;c.fillStyle='#061923';c.fillRect(0,0,512,300);c.fillStyle='#35e4df';c.font='bold 30px sans-serif';c.fillText(item.label,22,42);c.fillStyle='#9de8e5';c.font='22px sans-serif';c.fillText('主轴 '+(window.twinTelemetry?.rpm||3200)+' rpm',22,95);c.fillText('温度 '+(window.twinTelemetry?.temp||36.5)+' ℃',22,137);c.fillText('合格 '+goodDetected+' / 不良 '+badDetected,22,179);c.fillStyle='#16d9df';c.fillRect(22,205,460,3);c.fillStyle='#b7d9dc';c.font='18px sans-serif';c.fillText(activePick?'机械臂抓取缺陷件中':'CAM-01 在线 · '+totalDetected+' 件已检测',22,248);item.texture.needsUpdate=true;});}
  if(activePick){
-  const p=activePick;p.userData.pickT+=.012;const q=Math.min(p.userData.pickT,1);
+  const p=activePick;p.userData.pickT+=.012*frameScale;const q=Math.min(p.userData.pickT,1);
   const p0=p.userData.pickStart;
   const grip=new THREE.Vector3(-1.1,1.34,BELT_Z);       // 夹爪抬离传送带
   const lifted=new THREE.Vector3(-1.1,2.0,7.95);
@@ -1027,22 +1054,22 @@ function animate(){
  }else if(autoDetectionEnabled){robot.shoulder.rotation.x=Math.sin(t*1.2)*.035;robot.elbow.rotation.x=.10+Math.sin(t*1.2+1)*.025;robot.wrist.rotation.x=Math.sin(t*.9)*.025;}else{robot.shoulder.rotation.x=0;robot.elbow.rotation.x=0;robot.wrist.rotation.x=0;}
  // 主轴旋转及告警灯与实时转速/温度联动；机床观察门保持固定关闭
  const tele=window.twinTelemetry||{rpm:3200,temp:36.5};
- machineDynamics.forEach(d=>{d.spindle.rotation.y+=Math.max(.008,(tele.rpm||3200)/3200*.045);const hot=(tele.temp||36.5)>36.9;d.beacon.material.color.setHex(hot?0xff5a35:0x27e5a0);d.beacon.material.emissive.setHex(hot?0x8a1808:0x087c45);});
- fiveAxisDynamics.forEach((d,i)=>{d.spindle.rotation.y+=Math.max(.008,(tele.rpm||3200)/3200*.04);d.trunnion.rotation.x=Math.sin(t*.42+i*.7)*.10;d.mag.rotation.x+=.0015;});
+ machineDynamics.forEach(d=>{d.spindle.rotation.y+=Math.max(.008,(tele.rpm||3200)/3200*.045)*frameScale;const hot=(tele.temp||36.5)>36.9;d.beacon.material.color.setHex(hot?0xff5a35:0x27e5a0);d.beacon.material.emissive.setHex(hot?0x8a1808:0x087c45);});
+ fiveAxisDynamics.forEach((d,i)=>{d.spindle.rotation.y+=Math.max(.008,(tele.rpm||3200)/3200*.04)*frameScale;d.trunnion.rotation.x=Math.sin(t*.42+i*.7)*.10;d.mag.rotation.x+=.0015*frameScale;});
  // 双人巡检沿机床外围持续行走；缺陷分拣时第一名工人短暂转头关注
- if(workerMode==='inspectReject'){worker.head.rotation.y=.48;worker.armR.rotation.x=-.25+Math.sin(t*5)*.045;workerTimer+=.016;if(workerTimer>2.8){workerMode=patrolEnabled?'patrol':'station';workerTimer=0;worker.head.rotation.y=0;}}
- patrolAgents.forEach(agent=>{if(agent)updatePatrolAgent(agent,1/60);});if(!patrolEnabled&&patrolAgents.every(agent=>agent&&agent.mode==='station')){const ws=document.getElementById('workerState');if(ws)ws.textContent='电脑前待命';}
+ if(workerMode==='inspectReject'){worker.head.rotation.y=.48;worker.armR.rotation.x=-.25+Math.sin(t*5)*.045;workerTimer+=delta;if(workerTimer>2.8){workerMode=patrolEnabled?'patrol':'station';workerTimer=0;worker.head.rotation.y=0;}}
+ patrolAgents.forEach(agent=>{if(agent)updatePatrolAgent(agent,delta);});if(!patrolEnabled&&patrolAgents.every(agent=>agent&&agent.mode==='station')){const ws=document.getElementById('workerState');if(ws)ws.textContent='电脑前待命';}
  if(Math.floor(t*2)%7===0&&Math.random()<.035)burstSparks();
  // 远距离自动降低第二模块细节负载（LOD）
  secondaryLine.visible=camera.position.distanceTo(secondaryLine.position)<58;
  // 零件检测开启后，先等待值守工人抵达上料端，再按间隔逐件生成新零件。
  if(materialFeedEnabled&&feedAttendantReady){
-  feedSpawnTimer+=1/60;
+  feedSpawnTimer+=delta;
   if(feedSpawnTimer>=FEED_INTERVAL){feedSpawnTimer=0;spawnNextPart();}
  }
  // 只要传送带上还有零件，就持续运行；关闭零件检测只停止新增，不停止已有零件输送。
  if(workpieces.some(part=>part.visible&&(part.userData.state==='moving'||part.userData.state==='passed'||part.userData.state==='queued'))){
-  beltRollers.forEach(roller=>{roller.rotation.x-=.045;});
+  beltRollers.forEach(roller=>{roller.rotation.x-=.045*frameScale;});
  }
  workpieces.forEach(part=>{
   if(!part.visible)return;
@@ -1058,8 +1085,8 @@ function animate(){
     const gap=part.position.x-other.position.x;
     if(gap>0&&gap<2.7&&Math.abs(part.position.z-other.position.z)<.45){blockedByPart=true;break;}
    }
-   // 已经生成的零件始终沿传送带运行；关闭上料功能不影响在途零件。速度设为中等档，避免过慢或过快。
-   if(!blockedByPart)part.position.x-=.024;
+   // 已经生成的零件始终沿传送带运行；关闭上料功能不影响在途零件。
+   if(!blockedByPart)part.position.x-=.018;
    if(autoDetectionEnabled&&!part.userData.classified&&part.position.x<=-1.1){
     if(activePick&&part.userData.bad){part.position.x=-1.1;part.userData.state='queued';}
     else classifyPart(part);
@@ -1073,6 +1100,7 @@ function animate(){
 animate();
 addEventListener('resize',()=>{
  camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();
+ renderer.setPixelRatio(Math.min(devicePixelRatio,1.30));
  renderer.setSize(innerWidth,innerHeight);
 });
 </script>
